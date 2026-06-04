@@ -4,6 +4,8 @@
 
 #include "PitchMath.h"
 
+#include <vector>
+
 class ApertuneAudioProcessor final : public juce::AudioProcessor
 {
 public:
@@ -45,7 +47,9 @@ private:
 
     juce::AudioProcessorValueTreeState state;
     double currentSampleRate = 44100.0;
+    apertune::RealTimePitchDetector pitchDetector;
     std::optional<apertune::PitchReading> lastPitchReading;
+    std::vector<double> monoScratch;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ApertuneAudioProcessor)
 };
