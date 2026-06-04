@@ -212,6 +212,8 @@ void testSharpAndFlatOffsets()
 
 void testReferencePitchExtremes()
 {
+    checkNear(apertune::concertAStepHz, 0.1, 1e-12,
+        "Concert A step is 0.1 Hz");
     check(apertune::isSupportedConcertA(432.0), "432 Hz is supported");
     check(apertune::isSupportedConcertA(440.0), "440 Hz is supported");
     check(apertune::isSupportedConcertA(448.0), "448 Hz is supported");
@@ -256,6 +258,23 @@ void testReferencePitchExtremes()
         "analyseFrequency rejects concert A below 432");
     check(!apertune::analyseFrequency(440.0, 448.1).has_value(),
         "analyseFrequency rejects concert A above 448");
+}
+
+void testReferencePitchImmediatelyChangesMath()
+{
+    const auto at440 = apertune::analyseFrequency(440.0, 440.0);
+    const auto at432 = apertune::analyseFrequency(440.0, 432.0);
+
+    check(at440.has_value(), "440 Hz at A=440 returns reading");
+    check(at432.has_value(), "440 Hz at A=432 returns reading");
+    if (at440 && at432)
+    {
+        check(at440->midiNote == 69, "440 Hz at A=440 maps to A4");
+        checkNear(at440->cents, 0.0, 1e-6, "440 Hz at A=440 is centered");
+        check(at432->midiNote == 69, "440 Hz at A=432 still maps to A4");
+        check(at432->cents > 0.0, "440 Hz at A=432 reads sharp immediately");
+        checkNear(at432->cents, 31.77, 0.05, "440 Hz at A=432 cents changes immediately");
+    }
 }
 
 void testBoundaryFiftyCents()
@@ -478,6 +497,53 @@ void testTunerUiDeterministicFrames()
     check(!muted.hasSignal, "TunerUiModel: muted fixture suppresses live signal");
     check(!muted.panelGlow, "TunerUiModel: muted fixture has no lock glow");
 }
+
+void testTunerSettingsDriveStringRows()
+{
+    const auto bassPresets = apertune::presetsForScope(apertune::InstrumentScope::bass);
+    check(bassPresets.size() == 3, "TunerSettings: bass exposes 4-6 string presets");
+    check(bassPresets.front() == apertune::TuningPreset::bass4Standard,
+        "TunerSettings: bass default list starts with Bass 4");
+    check(bassPresets.back() == apertune::TuningPreset::bass6Standard,
+        "TunerSettings: bass default list ends with Bass 6");
+
+    const auto guitarPresets = apertune::presetsForScope(apertune::InstrumentScope::guitar);
+    check(guitarPresets.size() == 4, "TunerSettings: guitar exposes 6-9 string presets");
+    check(guitarPresets.front() == apertune::TuningPreset::guitar6Standard,
+        "TunerSettings: guitar default list starts with Guitar 6");
+    check(guitarPresets.back() == apertune::TuningPreset::guitar9Standard,
+        "TunerSettings: guitar default list ends with Guitar 9");
+
+    const auto customPresets = apertune::presetsForScope(apertune::InstrumentScope::custom);
+    check(customPresets.size() == 1 && customPresets.front() == apertune::TuningPreset::custom,
+        "TunerSettings: custom scope exposes custom preset");
+
+    apertune::TunerSettings settings;
+    settings.instrumentScope = apertune::InstrumentScope::bass;
+    settings.tuningPreset = apertune::TuningPreset::bass6Standard;
+    auto frame = apertune::makeTunerUiFrame(std::nullopt, false, apertune::defaultConcertAHz, settings);
+    check(frame.stringLabels.size() == 6, "TunerSettings: Bass 6 drives six string labels");
+    check(frame.stringLabels.front() == "B" && frame.stringLabels.back() == "C",
+        "TunerSettings: Bass 6 labels low B through high C");
+
+    settings.instrumentScope = apertune::InstrumentScope::guitar;
+    settings.tuningPreset = apertune::TuningPreset::guitar9Standard;
+    frame = apertune::makeTunerUiFrame(std::nullopt, false, apertune::defaultConcertAHz, settings);
+    check(frame.stringLabels.size() == 9, "TunerSettings: Guitar 9 drives nine string labels");
+    check(frame.stringLabels.front() == "C#" && frame.stringLabels.back() == "E",
+        "TunerSettings: Guitar 9 labels low C# through high E");
+
+    settings.accidentalSpelling = apertune::AccidentalSpelling::flats;
+    frame = apertune::makeTunerUiFrame(std::nullopt, false, apertune::defaultConcertAHz, settings);
+    check(frame.stringLabels.front() == "Db", "TunerSettings: flat spelling updates string labels");
+
+    settings.tuningPreset = apertune::TuningPreset::bass4Standard;
+    frame = apertune::makeTunerUiFrame(std::nullopt, false, apertune::defaultConcertAHz, settings);
+    check(frame.stringLabels.size() == 6, "TunerSettings: invalid scope preset coerces to Guitar 6");
+    check(apertune::coercePresetForScope(apertune::TuningPreset::bass4Standard, apertune::InstrumentScope::guitar)
+            == apertune::TuningPreset::guitar6Standard,
+        "TunerSettings: invalid guitar preset coerces to default");
+}
 } // namespace
 
 int main()
@@ -487,6 +553,7 @@ int main()
     testGuitarBassRangeExact();
     testSharpAndFlatOffsets();
     testReferencePitchExtremes();
+    testReferencePitchImmediatelyChangesMath();
     testBoundaryFiftyCents();
     testLockState();
     testInvalidInputs();
@@ -495,6 +562,7 @@ int main()
     testRealTimeDetectorSilenceRelease();
     testRealTimeDetectorSmoothing();
     testTunerUiDeterministicFrames();
+    testTunerSettingsDriveStringRows();
 
     if (failureCount > 0)
     {
