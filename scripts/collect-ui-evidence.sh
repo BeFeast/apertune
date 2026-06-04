@@ -20,7 +20,7 @@
 #                             (default: design/guitar-tuner-design-2026-06-04.zip,
 #                              falls back to host path when local file absent)
 #   APERTUNE_EVIDENCE_DIR     default: evidence/ui
-#   APERTUNE_REQUIRED_STATES  default: "flat in_tune sharp"
+#   APERTUNE_REQUIRED_STATES  default: "no_signal flat near in_tune_lock sharp muted"
 
 set -euo pipefail
 
@@ -31,7 +31,7 @@ DESIGN_ARCHIVE="${APERTUNE_DESIGN_ARCHIVE:-design/guitar-tuner-design-2026-06-04
 HOST_FALLBACK="/mnt/storage/src/apertune/design/guitar-tuner-design-2026-06-04.zip"
 EXPECTED_SHA="c7caedef1dfaae78d450164bf041fc7f00f63f7632749624000084fed14c6382"
 EVIDENCE_DIR="${APERTUNE_EVIDENCE_DIR:-evidence/ui}"
-read -r -a STATES <<< "${APERTUNE_REQUIRED_STATES:-flat in_tune sharp}"
+read -r -a STATES <<< "${APERTUNE_REQUIRED_STATES:-no_signal flat near in_tune_lock sharp muted}"
 STUDIO_HTML_NAME="Tuner - Studio.html"
 
 if [[ ! -f "$DESIGN_ARCHIVE" && -f "$HOST_FALLBACK" ]]; then

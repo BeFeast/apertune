@@ -105,8 +105,8 @@ Sections:
 | `plugin-validation` | `clap-validator`, `pluginval`, and (on macOS) `auval` when on `PATH`  |
 | `ui-evidence`       | Screenshot or deterministic report per required tune state            |
 
-Required tune states default to `flat`, `in_tune`, `sharp`. Override with
-`APERTUNE_REQUIRED_STATES="flat in_tune sharp lock"`.
+Required tune states default to `no_signal`, `flat`, `near`, `in_tune_lock`, `sharp`, and
+`muted`. Override with `APERTUNE_REQUIRED_STATES="flat in_tune_lock sharp"`.
 
 To generate placeholder UI evidence from the approved design archive (useful for CI smoke
 before live plugin capture exists), run:

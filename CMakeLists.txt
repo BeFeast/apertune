@@ -30,7 +30,8 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(clap_juce_extensions)
 
 add_library(apertune_core
-    src/PitchMath.cpp)
+    src/PitchMath.cpp
+    src/TunerUiModel.cpp)
 set_target_properties(apertune_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_include_directories(apertune_core
     PUBLIC
