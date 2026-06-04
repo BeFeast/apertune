@@ -83,11 +83,53 @@ cmake --build build --config Release --target Apertune_CLAP Apertune_VST3 apertu
 ctest --test-dir build --output-on-failure
 ```
 
-Run the product verifier supplied on the execution host as well. If host plugin validators
-such as `pluginval` are available, run them against the built plugin bundle and include the
-result in PR evidence. Build-only success is not enough for product `Done`; later verifier
-work must also prove plugin validation, pitch math, UI state evidence, and the design archive
-checksum.
+The product verifier lives at `scripts/verify.sh`. It is the single command that asserts the
+MVP Definition of Done; it exits non-zero whenever any required check fails. Build-only
+success is never enough.
+
+Run it locally:
+
+```bash
+scripts/verify.sh                       # all sections
+scripts/verify.sh --list                # list section names
+scripts/verify.sh --section=design,ui-evidence
+```
+
+Sections:
+
+| Section             | Checks                                                                |
+| ------------------- | --------------------------------------------------------------------- |
+| `design`            | SHA-256 of the design archive at `design/guitar-tuner-design-2026-06-04.zip` |
+| `dsp-tests`         | Project DSP/unit tests (`ctest`, `bun test`, or `uv run pytest`)      |
+| `build-artifacts`   | CLAP, VST3, and (on macOS) AU artifacts in `$APERTUNE_BUILD_DIR`      |
+| `plugin-validation` | `clap-validator`, `pluginval`, and (on macOS) `auval` when on `PATH`  |
+| `ui-evidence`       | Screenshot or deterministic report per required tune state            |
+
+Required tune states default to `flat`, `in_tune`, `sharp`. Override with
+`APERTUNE_REQUIRED_STATES="flat in_tune sharp lock"`.
+
+To generate placeholder UI evidence from the approved design archive (useful for CI smoke
+before live plugin capture exists), run:
+
+```bash
+scripts/collect-ui-evidence.sh
+```
+
+Placeholder evidence is gitignored; collect it on demand. Replace the collector with a live
+plugin capture step as the UI work lands.
+
+### CI
+
+GitHub Actions:
+
+```yaml
+- name: Apertune product verifier
+  run: scripts/verify.sh
+```
+
+The verifier reads the design archive from `design/guitar-tuner-design-2026-06-04.zip`.
+Provide it via the same secure delivery channel used locally (the archive is never committed)
+or override the path with `APERTUNE_DESIGN_ARCHIVE`.
 
 ## License
 

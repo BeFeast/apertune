@@ -58,14 +58,24 @@ Before opening a PR, run the repo-local build and test path:
     cmake --build build --config Release --target Apertune_CLAP Apertune_VST3 apertune_pitch_math_tests --parallel
     ctest --test-dir build --output-on-failure
 
-Also run the product verifier supplied on the execution host.
+The single product verifier is `scripts/verify.sh`; it exits non-zero whenever the MVP
+Definition of Done is not met. Build-only success is never enough.
 
 The verifier must eventually prove:
 
-- pitch math tests pass;
-- plugin targets build;
-- plugin validation passes where tooling is available;
-- UI state evidence matches Direction A anatomy;
-- design archive checksum matches.
+It runs, in order:
 
-Build-only success is not enough for product `Done`.
+1. `design` — SHA-256 of the design archive.
+2. `dsp-tests` — DSP / unit tests via the project's test runner.
+3. `build-artifacts` — CLAP, VST3, and (on macOS) AU artifacts under `$APERTUNE_BUILD_DIR`.
+4. `plugin-validation` — `clap-validator` / `pluginval` / `auval` where available.
+5. `ui-evidence` — screenshot or deterministic report per required tune state.
+
+Build-only success is not enough for product `Done`, and UI work is never marked done
+without visible evidence for the key tune states (default: `flat`, `in_tune`, `sharp`).
+
+Run subsets with `scripts/verify.sh --section=NAME[,NAME...]`. UI evidence can be (re)generated
+from the design archive with `scripts/collect-ui-evidence.sh`; that is a Phase 0/1 placeholder
+and should be replaced once the plugin scaffold can render live captures.
+
+See `README.md` for full usage and CI wiring.
