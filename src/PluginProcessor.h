@@ -3,6 +3,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 
 #include "PitchMath.h"
+#include "TunerUiModel.h"
 
 #include <vector>
 
@@ -37,6 +38,7 @@ public:
     void setStateInformation(const void* data, int sizeInBytes) override;
 
     juce::AudioProcessorValueTreeState& getState() noexcept { return state; }
+    apertune::TunerSettings getTunerSettings() const;
     std::optional<apertune::PitchReading> getLastPitchReading() const;
 
 private:

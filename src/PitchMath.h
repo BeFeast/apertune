@@ -12,6 +12,7 @@ namespace apertune
 inline constexpr double defaultConcertAHz = 440.0;
 inline constexpr double minConcertAHz = 432.0;
 inline constexpr double maxConcertAHz = 448.0;
+inline constexpr double concertAStepHz = 0.1;
 inline constexpr double lockThresholdCents = 3.0;
 
 inline constexpr std::array<std::string_view, 12> chromaticNoteNames {

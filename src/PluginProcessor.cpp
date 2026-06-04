@@ -3,12 +3,25 @@
 #include "PluginEditor.h"
 
 #include <algorithm>
+#include <cmath>
 #include <memory>
 
 namespace
 {
 constexpr auto muteParameterId = "mute";
 constexpr auto concertAParameterId = "concertA";
+constexpr auto displayUnitParameterId = "displayUnit";
+constexpr auto instrumentScopeParameterId = "instrumentScope";
+constexpr auto tuningPresetParameterId = "tuningPreset";
+constexpr auto accidentalSpellingParameterId = "accidentalSpelling";
+
+template <typename Enum>
+Enum parameterChoice(const juce::AudioProcessorValueTreeState& state, const char* parameterId, Enum fallback) noexcept
+{
+    if (const auto* value = state.getRawParameterValue(parameterId))
+        return static_cast<Enum>(static_cast<int>(std::round(value->load())));
+    return fallback;
+}
 } // namespace
 
 ApertuneAudioProcessor::ApertuneAudioProcessor()
@@ -30,8 +43,36 @@ juce::AudioProcessorValueTreeState::ParameterLayout ApertuneAudioProcessor::crea
         juce::NormalisableRange<float> {
             static_cast<float>(apertune::minConcertAHz),
             static_cast<float>(apertune::maxConcertAHz),
-            0.1f },
+            static_cast<float>(apertune::concertAStepHz) },
         static_cast<float>(apertune::defaultConcertAHz)));
+    parameters.push_back(std::make_unique<juce::AudioParameterChoice>(
+        juce::ParameterID { displayUnitParameterId, 1 },
+        "Display Unit",
+        juce::StringArray { "Cents", "Hz" },
+        static_cast<int>(apertune::DisplayUnit::cents)));
+    parameters.push_back(std::make_unique<juce::AudioParameterChoice>(
+        juce::ParameterID { instrumentScopeParameterId, 1 },
+        "Instrument Scope",
+        juce::StringArray { "Bass", "Guitar", "Custom" },
+        static_cast<int>(apertune::InstrumentScope::guitar)));
+    parameters.push_back(std::make_unique<juce::AudioParameterChoice>(
+        juce::ParameterID { tuningPresetParameterId, 1 },
+        "Tuning Preset",
+        juce::StringArray {
+            "Bass 4 Standard",
+            "Bass 5 Low B",
+            "Bass 6 Standard",
+            "Guitar 6 Standard",
+            "Guitar 7 Low B",
+            "Guitar 8 Standard",
+            "Guitar 9 Standard",
+            "Custom" },
+        static_cast<int>(apertune::TuningPreset::guitar6Standard)));
+    parameters.push_back(std::make_unique<juce::AudioParameterChoice>(
+        juce::ParameterID { accidentalSpellingParameterId, 1 },
+        "Accidental Spelling",
+        juce::StringArray { "Sharps", "Flats" },
+        static_cast<int>(apertune::AccidentalSpelling::sharps)));
     return { parameters.begin(), parameters.end() };
 }
 
@@ -121,6 +162,18 @@ void ApertuneAudioProcessor::setStateInformation(const void* data, int sizeInByt
 {
     if (auto xml = getXmlFromBinary(data, sizeInBytes))
         state.replaceState(juce::ValueTree::fromXml(*xml));
+}
+
+apertune::TunerSettings ApertuneAudioProcessor::getTunerSettings() const
+{
+    apertune::TunerSettings settings;
+    settings.displayUnit = parameterChoice(state, displayUnitParameterId, apertune::DisplayUnit::cents);
+    settings.instrumentScope = parameterChoice(state, instrumentScopeParameterId, apertune::InstrumentScope::guitar);
+    settings.tuningPreset = apertune::coercePresetForScope(
+        parameterChoice(state, tuningPresetParameterId, apertune::TuningPreset::guitar6Standard),
+        settings.instrumentScope);
+    settings.accidentalSpelling = parameterChoice(state, accidentalSpellingParameterId, apertune::AccidentalSpelling::sharps);
+    return settings;
 }
 
 std::optional<apertune::PitchReading> ApertuneAudioProcessor::getLastPitchReading() const

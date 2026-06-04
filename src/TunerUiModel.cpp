@@ -9,30 +9,44 @@ namespace
 {
 constexpr double nearThresholdCents = 12.0;
 constexpr double chevronThresholdCents = 0.5;
-constexpr std::array<int, 7> guitarStringMidiNotes { 35, 40, 45, 50, 55, 59, 64 };
+constexpr std::array<std::string_view, 12> flatNoteNames {
+    "C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"
+};
 
 double clamp(double value, double low, double high) noexcept
 {
     return std::max(low, std::min(high, value));
 }
 
-std::string_view previousNoteName(int midiNote) noexcept
+std::string_view previousNoteName(int midiNote, AccidentalSpelling spelling) noexcept
 {
-    return noteNameForMidiNote(midiNote - 1);
+    return noteNameForMidiNote(midiNote - 1, spelling);
 }
 
-std::string_view nextNoteName(int midiNote) noexcept
+std::string_view nextNoteName(int midiNote, AccidentalSpelling spelling) noexcept
 {
-    return noteNameForMidiNote(midiNote + 1);
+    return noteNameForMidiNote(midiNote + 1, spelling);
 }
 
-int nearestStringIndex(int midiNote) noexcept
+std::vector<std::string> labelsForMidiNotes(const std::vector<int>& midiNotes, AccidentalSpelling spelling)
 {
+    std::vector<std::string> labels;
+    labels.reserve(midiNotes.size());
+    for (const auto midiNote : midiNotes)
+        labels.emplace_back(noteNameForMidiNote(midiNote, spelling));
+    return labels;
+}
+
+int nearestStringIndex(int midiNote, const std::vector<int>& stringMidiNotes) noexcept
+{
+    if (stringMidiNotes.empty())
+        return -1;
+
     auto bestIndex = 0;
-    auto bestDistance = std::abs(midiNote - guitarStringMidiNotes[0]);
-    for (auto index = 1; index < static_cast<int>(guitarStringMidiNotes.size()); ++index)
+    auto bestDistance = std::abs(midiNote - stringMidiNotes.front());
+    for (auto index = 1; index < static_cast<int>(stringMidiNotes.size()); ++index)
     {
-        const auto distance = std::abs(midiNote - guitarStringMidiNotes[static_cast<std::size_t>(index)]);
+        const auto distance = std::abs(midiNote - stringMidiNotes[static_cast<std::size_t>(index)]);
         if (distance < bestDistance)
         {
             bestDistance = distance;
@@ -56,6 +70,166 @@ PitchReading fixtureReading(int midiNote, double cents, double visibility = 1.0)
 }
 } // namespace
 
+std::string_view noteNameForMidiNote(int midiNote, AccidentalSpelling spelling) noexcept
+{
+    if (spelling == AccidentalSpelling::flats)
+    {
+        const auto index = ((midiNote % 12) + 12) % 12;
+        return flatNoteNames[static_cast<std::size_t>(index)];
+    }
+
+    return noteNameForMidiNote(midiNote);
+}
+
+std::string_view displayUnitName(DisplayUnit unit) noexcept
+{
+    switch (unit)
+    {
+        case DisplayUnit::cents:
+            return "Cents";
+        case DisplayUnit::hertz:
+            return "Hz";
+    }
+
+    return "Cents";
+}
+
+std::string_view instrumentScopeName(InstrumentScope scope) noexcept
+{
+    switch (scope)
+    {
+        case InstrumentScope::bass:
+            return "Bass";
+        case InstrumentScope::guitar:
+            return "Guitar";
+        case InstrumentScope::custom:
+            return "Custom";
+    }
+
+    return "Guitar";
+}
+
+std::string_view tuningPresetName(TuningPreset preset) noexcept
+{
+    switch (preset)
+    {
+        case TuningPreset::bass4Standard:
+            return "Bass 4 Standard";
+        case TuningPreset::bass5LowB:
+            return "Bass 5 Low B";
+        case TuningPreset::bass6Standard:
+            return "Bass 6 Standard";
+        case TuningPreset::guitar6Standard:
+            return "Guitar 6 Standard";
+        case TuningPreset::guitar7LowB:
+            return "Guitar 7 Low B";
+        case TuningPreset::guitar8Standard:
+            return "Guitar 8 Standard";
+        case TuningPreset::guitar9Standard:
+            return "Guitar 9 Standard";
+        case TuningPreset::custom:
+            return "Custom";
+    }
+
+    return "Guitar 6 Standard";
+}
+
+std::string_view accidentalSpellingName(AccidentalSpelling spelling) noexcept
+{
+    switch (spelling)
+    {
+        case AccidentalSpelling::sharps:
+            return "Sharps";
+        case AccidentalSpelling::flats:
+            return "Flats";
+    }
+
+    return "Sharps";
+}
+
+std::vector<TuningPreset> presetsForScope(InstrumentScope scope)
+{
+    switch (scope)
+    {
+        case InstrumentScope::bass:
+            return { TuningPreset::bass4Standard, TuningPreset::bass5LowB, TuningPreset::bass6Standard };
+        case InstrumentScope::guitar:
+            return { TuningPreset::guitar6Standard,
+                TuningPreset::guitar7LowB,
+                TuningPreset::guitar8Standard,
+                TuningPreset::guitar9Standard };
+        case InstrumentScope::custom:
+            return { TuningPreset::custom };
+    }
+
+    return { TuningPreset::guitar6Standard };
+}
+
+TuningPreset defaultPresetForScope(InstrumentScope scope) noexcept
+{
+    switch (scope)
+    {
+        case InstrumentScope::bass:
+            return TuningPreset::bass4Standard;
+        case InstrumentScope::guitar:
+            return TuningPreset::guitar6Standard;
+        case InstrumentScope::custom:
+            return TuningPreset::custom;
+    }
+
+    return TuningPreset::guitar6Standard;
+}
+
+bool presetBelongsToScope(TuningPreset preset, InstrumentScope scope) noexcept
+{
+    switch (preset)
+    {
+        case TuningPreset::bass4Standard:
+        case TuningPreset::bass5LowB:
+        case TuningPreset::bass6Standard:
+            return scope == InstrumentScope::bass;
+        case TuningPreset::guitar6Standard:
+        case TuningPreset::guitar7LowB:
+        case TuningPreset::guitar8Standard:
+        case TuningPreset::guitar9Standard:
+            return scope == InstrumentScope::guitar;
+        case TuningPreset::custom:
+            return scope == InstrumentScope::custom;
+    }
+
+    return false;
+}
+
+TuningDefinition tuningDefinitionForPreset(TuningPreset preset)
+{
+    switch (preset)
+    {
+        case TuningPreset::bass4Standard:
+            return { preset, InstrumentScope::bass, tuningPresetName(preset), { 28, 33, 38, 43 }, { "E", "A", "D", "G" } };
+        case TuningPreset::bass5LowB:
+            return { preset, InstrumentScope::bass, tuningPresetName(preset), { 23, 28, 33, 38, 43 }, { "B", "E", "A", "D", "G" } };
+        case TuningPreset::bass6Standard:
+            return { preset, InstrumentScope::bass, tuningPresetName(preset), { 23, 28, 33, 38, 43, 48 }, { "B", "E", "A", "D", "G", "C" } };
+        case TuningPreset::guitar6Standard:
+            return { preset, InstrumentScope::guitar, tuningPresetName(preset), { 40, 45, 50, 55, 59, 64 }, { "E", "A", "D", "G", "B", "E" } };
+        case TuningPreset::guitar7LowB:
+            return { preset, InstrumentScope::guitar, tuningPresetName(preset), { 35, 40, 45, 50, 55, 59, 64 }, { "B", "E", "A", "D", "G", "B", "E" } };
+        case TuningPreset::guitar8Standard:
+            return { preset, InstrumentScope::guitar, tuningPresetName(preset), { 30, 35, 40, 45, 50, 55, 59, 64 }, { "F#", "B", "E", "A", "D", "G", "B", "E" } };
+        case TuningPreset::guitar9Standard:
+            return { preset, InstrumentScope::guitar, tuningPresetName(preset), { 25, 30, 35, 40, 45, 50, 55, 59, 64 }, { "C#", "F#", "B", "E", "A", "D", "G", "B", "E" } };
+        case TuningPreset::custom:
+            return { preset, InstrumentScope::custom, tuningPresetName(preset), { 40, 45, 50, 55, 59, 64 }, { "E", "A", "D", "G", "B", "E" } };
+    }
+
+    return tuningDefinitionForPreset(TuningPreset::guitar6Standard);
+}
+
+TuningPreset coercePresetForScope(TuningPreset preset, InstrumentScope scope) noexcept
+{
+    return presetBelongsToScope(preset, scope) ? preset : defaultPresetForScope(scope);
+}
+
 TunerUiState classifyTuneState(const std::optional<PitchReading>& reading, bool muted) noexcept
 {
     if (muted)
@@ -78,13 +252,22 @@ TuneDirection tuneDirectionForCents(double cents) noexcept
     return cents < 0.0 ? TuneDirection::tuneUp : TuneDirection::tuneDown;
 }
 
-TunerUiFrame makeTunerUiFrame(const std::optional<PitchReading>& reading, bool muted, double concertAHz)
+TunerUiFrame makeTunerUiFrame(
+    const std::optional<PitchReading>& reading,
+    bool muted,
+    double concertAHz,
+    TunerSettings settings)
 {
     const auto state = classifyTuneState(reading, muted);
+    const auto preset = coercePresetForScope(settings.tuningPreset, settings.instrumentScope);
+    auto tuning = tuningDefinitionForPreset(preset);
+    tuning.stringLabels = labelsForMidiNotes(tuning.stringMidiNotes, settings.accidentalSpelling);
 
     TunerUiFrame frame;
     frame.state = state;
     frame.muted = muted;
+    frame.stringLabels = tuning.stringLabels;
+    frame.tunedStrings.assign(frame.stringLabels.size(), false);
 
     if (reading)
     {
@@ -97,15 +280,15 @@ TunerUiFrame makeTunerUiFrame(const std::optional<PitchReading>& reading, bool m
             static_cast<double>(reading->midiNote) + reading->cents / 100.0,
             isSupportedConcertA(concertAHz) ? concertAHz : defaultConcertAHz);
         frame.visibility = muted ? 0.32 : clamp(reading->visibility, 0.0, 1.0);
-        frame.noteName = reading->noteName;
-        frame.previousNoteName = previousNoteName(reading->midiNote);
-        frame.nextNoteName = nextNoteName(reading->midiNote);
-        frame.activeStringIndex = nearestStringIndex(reading->midiNote);
+        frame.noteName = noteNameForMidiNote(reading->midiNote, settings.accidentalSpelling);
+        frame.previousNoteName = previousNoteName(reading->midiNote, settings.accidentalSpelling);
+        frame.nextNoteName = nextNoteName(reading->midiNote, settings.accidentalSpelling);
+        frame.activeStringIndex = nearestStringIndex(reading->midiNote, tuning.stringMidiNotes);
     }
     else
     {
         frame.visibility = muted ? 0.26 : 0.18;
-        frame.activeStringIndex = muted ? 0 : -1;
+        frame.activeStringIndex = muted && !frame.stringLabels.empty() ? 0 : -1;
     }
 
     frame.direction = tuneDirectionForCents(frame.cents);
@@ -114,7 +297,9 @@ TunerUiFrame makeTunerUiFrame(const std::optional<PitchReading>& reading, bool m
     frame.reticleDiameter = frame.inLock ? 78.0 : 102.0;
     frame.panelGlow = frame.inLock;
 
-    if (frame.inLock && frame.activeStringIndex >= 0)
+    if (frame.inLock
+        && frame.activeStringIndex >= 0
+        && frame.activeStringIndex < static_cast<int>(frame.tunedStrings.size()))
         frame.tunedStrings[static_cast<std::size_t>(frame.activeStringIndex)] = true;
 
     return frame;
