@@ -1,4 +1,5 @@
 #include "PitchMath.h"
+#include "TunerUiModel.h"
 
 #include <cmath>
 #include <cstdlib>
@@ -432,6 +433,51 @@ void testRealTimeDetectorSmoothing()
     if (reading)
         check(reading->cents > 18.0, "RealTimePitchDetector: deliberate peg turn is not over-smoothed");
 }
+
+void testTunerUiDeterministicFrames()
+{
+    const auto noSignal = apertune::deterministicTunerUiFrame(apertune::TunerUiState::noSignal);
+    check(noSignal.state == apertune::TunerUiState::noSignal, "TunerUiModel: no-signal fixture state");
+    check(!noSignal.hasSignal, "TunerUiModel: no-signal fixture has no live signal");
+    checkNear(noSignal.ballPosition, 0.5, 1e-9, "TunerUiModel: no-signal ball is centered placeholder");
+    check(!noSignal.showChevron, "TunerUiModel: no-signal hides chevron");
+
+    const auto flat = apertune::deterministicTunerUiFrame(apertune::TunerUiState::flat);
+    check(flat.state == apertune::TunerUiState::flat, "TunerUiModel: flat fixture state");
+    check(flat.direction == apertune::TuneDirection::tuneUp, "TunerUiModel: flat means tune up");
+    check(flat.showChevron, "TunerUiModel: flat shows chevron");
+    check(flat.ballPosition < 0.5, "TunerUiModel: flat ball sits left of center");
+    check(!flat.inLock && !flat.panelGlow, "TunerUiModel: flat is not locked");
+
+    const auto near = apertune::deterministicTunerUiFrame(apertune::TunerUiState::near);
+    check(near.state == apertune::TunerUiState::near, "TunerUiModel: near fixture state");
+    check(near.showChevron, "TunerUiModel: near shows direction chevron");
+    check(near.ballPosition > 0.0 && near.ballPosition < 0.5,
+        "TunerUiModel: near-flat ball remains left of center");
+
+    const auto lock = apertune::deterministicTunerUiFrame(apertune::TunerUiState::inTuneLock);
+    check(lock.state == apertune::TunerUiState::inTuneLock, "TunerUiModel: lock fixture state");
+    check(lock.inLock, "TunerUiModel: lock fixture is in lock");
+    check(lock.panelGlow, "TunerUiModel: lock fixture enables panel glow");
+    check(!lock.showChevron, "TunerUiModel: lock fixture hides chevron");
+    checkNear(lock.ballPosition, 0.5, 1e-9, "TunerUiModel: lock fixture centers ball");
+    checkNear(lock.reticleDiameter, 78.0, 1e-9, "TunerUiModel: lock fixture tightens reticle");
+    check(lock.activeStringIndex >= 0
+            && lock.tunedStrings[static_cast<std::size_t>(lock.activeStringIndex)],
+        "TunerUiModel: lock fixture marks active string tuned");
+
+    const auto sharp = apertune::deterministicTunerUiFrame(apertune::TunerUiState::sharp);
+    check(sharp.state == apertune::TunerUiState::sharp, "TunerUiModel: sharp fixture state");
+    check(sharp.direction == apertune::TuneDirection::tuneDown, "TunerUiModel: sharp means tune down");
+    check(sharp.showChevron, "TunerUiModel: sharp shows chevron");
+    check(sharp.ballPosition > 0.5, "TunerUiModel: sharp ball sits right of center");
+
+    const auto muted = apertune::deterministicTunerUiFrame(apertune::TunerUiState::muted);
+    check(muted.state == apertune::TunerUiState::muted, "TunerUiModel: muted fixture state");
+    check(muted.muted, "TunerUiModel: muted fixture has muted flag");
+    check(!muted.hasSignal, "TunerUiModel: muted fixture suppresses live signal");
+    check(!muted.panelGlow, "TunerUiModel: muted fixture has no lock glow");
+}
 } // namespace
 
 int main()
@@ -448,6 +494,7 @@ int main()
     testRealTimeDetectorRejectsOvertoneWhenFundamentalPresent();
     testRealTimeDetectorSilenceRelease();
     testRealTimeDetectorSmoothing();
+    testTunerUiDeterministicFrames();
 
     if (failureCount > 0)
     {

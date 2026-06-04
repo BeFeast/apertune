@@ -11,7 +11,8 @@
 #   build-artifacts   — CLAP / VST3 / AU artifacts under $APERTUNE_BUILD_DIR
 #   plugin-validation — clap-validator / pluginval / auval (where available)
 #   ui-evidence       — screenshot or deterministic UI inspection report for
-#                       each required tune state (default: flat / in_tune / sharp)
+#                       each required tune state (default: no signal / flat /
+#                       near / in-tune lock / sharp / muted)
 #
 # Usage:
 #   scripts/verify.sh                          # run all sections
@@ -23,7 +24,7 @@
 #   APERTUNE_DESIGN_ARCHIVE   default: design/guitar-tuner-design-2026-06-04.zip
 #   APERTUNE_BUILD_DIR        default: build
 #   APERTUNE_EVIDENCE_DIR     default: evidence/ui
-#   APERTUNE_REQUIRED_STATES  default: "flat in_tune sharp"
+#   APERTUNE_REQUIRED_STATES  default: "no_signal flat near in_tune_lock sharp muted"
 #   APERTUNE_AU_SPEC          'aufx <type> <sub> <mfr>' for auval (macOS only)
 
 set -uo pipefail
@@ -35,7 +36,7 @@ DESIGN_ARCHIVE="${APERTUNE_DESIGN_ARCHIVE:-design/guitar-tuner-design-2026-06-04
 EXPECTED_SHA="c7caedef1dfaae78d450164bf041fc7f00f63f7632749624000084fed14c6382"
 BUILD_DIR="${APERTUNE_BUILD_DIR:-build}"
 EVIDENCE_DIR="${APERTUNE_EVIDENCE_DIR:-evidence/ui}"
-read -r -a REQUIRED_STATES <<< "${APERTUNE_REQUIRED_STATES:-flat in_tune sharp}"
+read -r -a REQUIRED_STATES <<< "${APERTUNE_REQUIRED_STATES:-no_signal flat near in_tune_lock sharp muted}"
 
 FAILED=0
 SKIPPED=0
