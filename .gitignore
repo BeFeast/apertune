@@ -18,3 +18,9 @@ node_modules/
 # Design archive is provided to workers from the private workspace; never commit it (contains screen captures).
 /design/*.zip
 *.zip
+
+# Maestro pipeline per-task scratchpad (auto-generated per worktree).
+.maestro/
+
+# UI evidence (regenerate via scripts/collect-ui-evidence.sh; do not commit screenshots / placeholder reports).
+/evidence/
