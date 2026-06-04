@@ -1,0 +1,20 @@
+.DS_Store
+build/
+cmake-build-*/
+out/
+dist/
+*.log
+*.tmp
+*.user
+*.suo
+*.xcuserdata/
+DerivedData/
+.cache/
+node_modules/
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Design archive is provided to workers from the private workspace; never commit it (contains screen captures).
+/design/*.zip
+*.zip
