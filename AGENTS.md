@@ -10,6 +10,7 @@ orchestration, issue intake, Maestro config, verifier policy, or product scope.
 
 - Development, builds, tests, and validation run on the designated execution host, not in a local reference checkout.
 - If the implementation checkout and the project-manager workspace disagree, the implementation checkout is authoritative for code and the project-manager workspace is authoritative for orchestration and spec state.
+- Do not write personal, infrastructure, execution-host, worktree, or orchestration paths into tracked files, commit messages, or PR text. Refer to those locations abstractly.
 
 Before editing or testing:
 
@@ -50,6 +51,14 @@ For non-trivial work:
 - Do not introduce secrets or local generated artifacts into git.
 
 ## Verification
+
+Before opening a PR, run the repo-local build and test path:
+
+    cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+    cmake --build build --config Release --target Apertune_CLAP Apertune_VST3 apertune_pitch_math_tests --parallel
+    ctest --test-dir build --output-on-failure
+
+Also run the product verifier supplied on the execution host.
 
 The verifier must eventually prove:
 

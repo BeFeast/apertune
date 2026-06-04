@@ -1,6 +1,9 @@
 # Design Archive
 
-Place the approved design archive here:
+The approved design archive is supplied to workers on the execution host and is read-only.
+Do not commit it to this repository.
+
+Expected archive name:
 
 ```text
 design/guitar-tuner-design-2026-06-04.zip
