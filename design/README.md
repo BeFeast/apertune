@@ -6,6 +6,9 @@ Place the approved design archive here:
 design/guitar-tuner-design-2026-06-04.zip
 ```
 
+The archive is ignored by git and must stay untracked. For verifier runs that use a
+read-only archive outside the checkout, set `APERTUNE_DESIGN_ARCHIVE` to that file.
+
 Expected SHA-256:
 
 ```text

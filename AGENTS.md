@@ -51,6 +51,10 @@ For non-trivial work:
 
 ## Verification
 
+Run the product verifier before opening a PR:
+
+    scripts/apertune-product-verifier.sh
+
 The verifier must eventually prove:
 
 - pitch math tests pass;
@@ -60,3 +64,7 @@ The verifier must eventually prove:
 - design archive checksum matches.
 
 Build-only success is not enough for product `Done`.
+
+The verifier is allowed to fail while the repo is still missing scaffolded product evidence;
+that failure is the expected signal. Do not mark UI work done unless the verifier can collect
+screenshot evidence or a deterministic UI inspection report for key tune states.

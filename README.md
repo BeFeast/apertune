@@ -34,8 +34,35 @@ Expected next work:
 
 ## Verification
 
-Until the plugin scaffold exists, the verifier is a bootstrap guard. It is expected to fail
-until build/test/validation commands are implemented.
+Run the product verifier with:
+
+```bash
+scripts/apertune-product-verifier.sh
+```
+
+The verifier is intentionally broader than a compile check. It gates the MVP Definition of
+Done by checking:
+
+- approved design archive SHA-256;
+- DSP/unit tests;
+- CLAP, VST3, and AU build artifacts;
+- plugin validation when a validator is available;
+- UI screenshot evidence or a deterministic UI state inspection report for key tune states.
+
+Until the plugin scaffold exists, the verifier is expected to fail non-zero and report the
+missing proof. The design archive is ignored by git; place it under `design/` for local runs
+or set `APERTUNE_DESIGN_ARCHIVE` to the read-only archive path supplied by the execution host.
+
+Repo-local CI should run the same script after restoring the design archive and installing the
+plugin toolchain. Scaffold-specific jobs may provide:
+
+- `APERTUNE_DSP_TEST_CMD`
+- `APERTUNE_PLUGIN_BUILD_CMD`
+- `APERTUNE_PLUGIN_VALIDATION_CMD`
+- `APERTUNE_UI_EVIDENCE_CMD`
+
+Artifact locations can be overridden with `APERTUNE_CLAP_ARTIFACT`,
+`APERTUNE_VST3_ARTIFACT`, and `APERTUNE_AU_ARTIFACT`.
 
 ## License
 
