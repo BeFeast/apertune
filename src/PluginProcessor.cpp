@@ -2,32 +2,13 @@
 
 #include "PluginEditor.h"
 
+#include <algorithm>
 #include <memory>
-#include <vector>
 
 namespace
 {
 constexpr auto muteParameterId = "mute";
 constexpr auto concertAParameterId = "concertA";
-
-template <typename SampleType>
-double estimateZeroCrossingFrequency(const juce::AudioBuffer<SampleType>& buffer, double sampleRate)
-{
-    if (buffer.getNumChannels() == 0 || buffer.getNumSamples() < 2 || sampleRate <= 0.0)
-        return 0.0;
-
-    const auto* channel = buffer.getReadPointer(0);
-    int crossings = 0;
-
-    for (int i = 1; i < buffer.getNumSamples(); ++i)
-    {
-        if ((channel[i - 1] <= SampleType{} && channel[i] > SampleType{})
-            || (channel[i - 1] >= SampleType{} && channel[i] < SampleType{}))
-            ++crossings;
-    }
-
-    return (static_cast<double>(crossings) * sampleRate) / (2.0 * static_cast<double>(buffer.getNumSamples()));
-}
 } // namespace
 
 ApertuneAudioProcessor::ApertuneAudioProcessor()
@@ -54,9 +35,12 @@ juce::AudioProcessorValueTreeState::ParameterLayout ApertuneAudioProcessor::crea
     return { parameters.begin(), parameters.end() };
 }
 
-void ApertuneAudioProcessor::prepareToPlay(double sampleRate, int)
+void ApertuneAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
     currentSampleRate = sampleRate;
+    pitchDetector.prepare(sampleRate);
+    monoScratch.reserve(static_cast<std::size_t>(std::max(0, samplesPerBlock)));
+    lastPitchReading.reset();
 }
 
 void ApertuneAudioProcessor::releaseResources() {}
@@ -84,9 +68,26 @@ void ApertuneAudioProcessor::processBlock(juce::AudioBuffer<double>& buffer, juc
 template <typename SampleType>
 void ApertuneAudioProcessor::processAudio(juce::AudioBuffer<SampleType>& buffer)
 {
-    const auto estimatedFrequency = estimateZeroCrossingFrequency(buffer, currentSampleRate);
     const auto concertA = static_cast<double>(*state.getRawParameterValue(concertAParameterId));
-    lastPitchReading = apertune::analyseFrequency(estimatedFrequency, concertA);
+    const auto channelCount = buffer.getNumChannels();
+    const auto sampleCount = buffer.getNumSamples();
+
+    if (channelCount > 0 && sampleCount > 0)
+    {
+        monoScratch.assign(static_cast<std::size_t>(sampleCount), 0.0);
+        for (int channel = 0; channel < channelCount; ++channel)
+        {
+            const auto* input = buffer.getReadPointer(channel);
+            for (int sample = 0; sample < sampleCount; ++sample)
+                monoScratch[static_cast<std::size_t>(sample)] += static_cast<double>(input[sample]);
+        }
+
+        const auto gain = 1.0 / static_cast<double>(channelCount);
+        for (auto& sample : monoScratch)
+            sample *= gain;
+
+        lastPitchReading = pitchDetector.processSamples(monoScratch.data(), monoScratch.size(), concertA);
+    }
 
     if (*state.getRawParameterValue(muteParameterId) > 0.5f)
         buffer.clear();

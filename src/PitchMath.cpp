@@ -1,9 +1,18 @@
 #include "PitchMath.h"
 
+#include <algorithm>
 #include <cmath>
 
 namespace apertune
 {
+namespace
+{
+double clamp(double value, double low, double high)
+{
+    return std::max(low, std::min(high, value));
+}
+} // namespace
+
 bool isValidFrequency(double frequencyHz) noexcept
 {
     return std::isfinite(frequencyHz) && frequencyHz > 0.0;
@@ -59,8 +68,220 @@ std::optional<PitchReading> analyseFrequency(double frequencyHz, double concertA
     reading.octave = octaveForMidiNote(nearestMidi);
     reading.cents = cents;
     reading.referenceFrequencyHz = referenceFrequency;
+    reading.visibility = 1.0;
     reading.noteName = noteNameForMidiNote(nearestMidi);
     reading.inLock = isInLock(cents);
     return reading;
+}
+
+RealTimePitchDetector::RealTimePitchDetector(PitchDetectorConfig detectorConfig)
+    : config(detectorConfig)
+{
+    prepare(sampleRate);
+}
+
+void RealTimePitchDetector::prepare(double newSampleRate)
+{
+    sampleRate = std::isfinite(newSampleRate) && newSampleRate > 0.0 ? newSampleRate : 44100.0;
+
+    const auto minFrequency = std::max(1.0, config.minFrequencyHz);
+    const auto maxTau = static_cast<std::size_t>(std::ceil(sampleRate / minFrequency));
+    hopSize = std::max<std::size_t>(1,
+        static_cast<std::size_t>(std::round(sampleRate * config.updateIntervalSeconds)));
+    windowSize = std::max<std::size_t>(2048, maxTau + hopSize);
+    yinBuffer.assign(maxTau + 1, 0.0);
+
+    reset();
+}
+
+void RealTimePitchDetector::reset()
+{
+    samplesSinceAnalysis = 0;
+    silentSamples = 0;
+    sampleWindow.clear();
+    smoothedMidi.reset();
+    currentReading.reset();
+    heldReading.reset();
+}
+
+void RealTimePitchDetector::pushSample(double sample)
+{
+    sampleWindow.push_back(std::isfinite(sample) ? sample : 0.0);
+    while (sampleWindow.size() > windowSize)
+        sampleWindow.pop_front();
+}
+
+void RealTimePitchDetector::analysePending(double concertAHz)
+{
+    if (!isSupportedConcertA(concertAHz))
+    {
+        currentReading.reset();
+        heldReading.reset();
+        smoothedMidi.reset();
+        return;
+    }
+
+    const auto rms = calculateRms();
+    if (sampleWindow.size() < windowSize / 2 || rms < config.silenceRmsThreshold)
+    {
+        updateRelease(false);
+        return;
+    }
+
+    if (const auto frequency = estimateFrequency())
+    {
+        currentReading = smoothReading(*frequency, concertAHz);
+        heldReading = currentReading;
+        silentSamples = 0;
+        return;
+    }
+
+    updateRelease(false);
+}
+
+std::optional<double> RealTimePitchDetector::estimateFrequency()
+{
+    if (sampleWindow.size() < windowSize / 2 || sampleRate <= 0.0)
+        return std::nullopt;
+
+    const auto minTau = std::max<std::size_t>(2,
+        static_cast<std::size_t>(std::floor(sampleRate / config.maxFrequencyHz)));
+    const auto maxTau = std::min<std::size_t>(yinBuffer.size() - 1,
+        static_cast<std::size_t>(std::ceil(sampleRate / config.minFrequencyHz)));
+    if (minTau >= maxTau || sampleWindow.size() <= maxTau)
+        return std::nullopt;
+
+    const auto compareCount = sampleWindow.size() - maxTau;
+    std::fill(yinBuffer.begin(), yinBuffer.end(), 0.0);
+
+    for (std::size_t tau = 1; tau <= maxTau; ++tau)
+    {
+        double sum = 0.0;
+        for (std::size_t i = 0; i < compareCount; ++i)
+        {
+            const auto delta = sampleWindow[i] - sampleWindow[i + tau];
+            sum += delta * delta;
+        }
+        yinBuffer[tau] = sum;
+    }
+
+    yinBuffer[0] = 1.0;
+    double runningSum = 0.0;
+    for (std::size_t tau = 1; tau <= maxTau; ++tau)
+    {
+        runningSum += yinBuffer[tau];
+        yinBuffer[tau] = runningSum > 0.0
+            ? yinBuffer[tau] * static_cast<double>(tau) / runningSum
+            : 1.0;
+    }
+
+    std::size_t tauEstimate = 0;
+    for (std::size_t tau = minTau; tau <= maxTau; ++tau)
+    {
+        if (yinBuffer[tau] < config.yinThreshold)
+        {
+            while (tau + 1 <= maxTau && yinBuffer[tau + 1] < yinBuffer[tau])
+                ++tau;
+            tauEstimate = tau;
+            break;
+        }
+    }
+
+    if (tauEstimate == 0)
+    {
+        tauEstimate = minTau;
+        for (std::size_t tau = minTau + 1; tau <= maxTau; ++tau)
+        {
+            if (yinBuffer[tau] < yinBuffer[tauEstimate])
+                tauEstimate = tau;
+        }
+
+        if (yinBuffer[tauEstimate] > config.yinThreshold * 1.75)
+            return std::nullopt;
+    }
+
+    auto refinedTau = static_cast<double>(tauEstimate);
+    if (tauEstimate > 1 && tauEstimate + 1 <= maxTau)
+    {
+        const auto left = yinBuffer[tauEstimate - 1];
+        const auto center = yinBuffer[tauEstimate];
+        const auto right = yinBuffer[tauEstimate + 1];
+        const auto denominator = left - 2.0 * center + right;
+        if (std::abs(denominator) > 1e-12)
+            refinedTau += 0.5 * (left - right) / denominator;
+    }
+
+    if (refinedTau <= 0.0)
+        return std::nullopt;
+
+    const auto frequency = sampleRate / refinedTau;
+    if (frequency < config.minFrequencyHz || frequency > config.maxFrequencyHz)
+        return std::nullopt;
+
+    return frequency;
+}
+
+double RealTimePitchDetector::calculateRms() const
+{
+    if (sampleWindow.empty())
+        return 0.0;
+
+    double sum = 0.0;
+    for (const auto sample : sampleWindow)
+        sum += sample * sample;
+    return std::sqrt(sum / static_cast<double>(sampleWindow.size()));
+}
+
+std::optional<PitchReading> RealTimePitchDetector::smoothReading(double frequencyHz, double concertAHz)
+{
+    if (!isValidFrequency(frequencyHz))
+        return std::nullopt;
+
+    const auto rawMidi = midiNoteFromFrequency(frequencyHz, concertAHz);
+    if (!smoothedMidi)
+    {
+        smoothedMidi = rawMidi;
+    }
+    else
+    {
+        const auto centsDelta = std::abs(rawMidi - *smoothedMidi) * 100.0;
+        const auto timeConstant = centsDelta >= config.turnThresholdCents
+            ? config.turnTimeConstantSeconds
+            : config.jitterTimeConstantSeconds;
+        const auto alpha = clamp(config.updateIntervalSeconds / std::max(config.updateIntervalSeconds, timeConstant),
+            0.0,
+            1.0);
+        *smoothedMidi += (rawMidi - *smoothedMidi) * alpha;
+    }
+
+    return analyseFrequency(frequencyFromMidiNote(*smoothedMidi, concertAHz), concertAHz);
+}
+
+void RealTimePitchDetector::updateRelease(bool signalPresent)
+{
+    if (signalPresent)
+        silentSamples = 0;
+    else
+        silentSamples += hopSize;
+
+    const auto heldSamples = static_cast<std::size_t>(std::round(config.releaseHoldSeconds * sampleRate));
+    const auto fadeSamples = static_cast<std::size_t>(std::round(config.releaseFadeSeconds * sampleRate));
+    if (heldReading && silentSamples <= heldSamples)
+    {
+        currentReading = heldReading;
+        currentReading->visibility = 1.0;
+        return;
+    }
+
+    if (heldReading && fadeSamples > 0 && silentSamples <= heldSamples + fadeSamples)
+    {
+        currentReading = heldReading;
+        const auto fadeProgress = static_cast<double>(silentSamples - heldSamples) / static_cast<double>(fadeSamples);
+        currentReading->visibility = clamp(1.0 - fadeProgress, 0.0, 1.0);
+        return;
+    }
+
+    currentReading.reset();
+    smoothedMidi.reset();
 }
 } // namespace apertune

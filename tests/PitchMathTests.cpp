@@ -5,6 +5,8 @@
 #include <iostream>
 #include <limits>
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace
 {
@@ -39,6 +41,62 @@ void checkNear(double actual, double expected, double tolerance, const std::stri
 double pitchAtCents(double midi, double cents, double concertA = apertune::defaultConcertAHz)
 {
     return concertA * std::pow(2.0, (midi - 69.0 + cents / 100.0) / 12.0);
+}
+
+std::vector<double> renderSine(double frequencyHz, double seconds, double sampleRate, double amplitude = 0.2)
+{
+    const auto count = static_cast<std::size_t>(std::round(seconds * sampleRate));
+    std::vector<double> samples(count, 0.0);
+    double phase = 0.0;
+    const auto phaseStep = 2.0 * std::acos(-1.0) * frequencyHz / sampleRate;
+    for (auto& sample : samples)
+    {
+        sample = amplitude * std::sin(phase);
+        phase += phaseStep;
+    }
+    return samples;
+}
+
+std::vector<double> renderContinuousSine(
+    const std::vector<std::pair<double, double>>& frequencySeconds,
+    double sampleRate,
+    double amplitude = 0.2)
+{
+    std::vector<double> samples;
+    double phase = 0.0;
+    for (const auto& segment : frequencySeconds)
+    {
+        const auto count = static_cast<std::size_t>(std::round(segment.second * sampleRate));
+        const auto phaseStep = 2.0 * std::acos(-1.0) * segment.first / sampleRate;
+        for (std::size_t i = 0; i < count; ++i)
+        {
+            samples.push_back(amplitude * std::sin(phase));
+            phase += phaseStep;
+        }
+    }
+    return samples;
+}
+
+std::vector<double> renderHarmonicTone(double frequencyHz, double seconds, double sampleRate)
+{
+    const auto count = static_cast<std::size_t>(std::round(seconds * sampleRate));
+    std::vector<double> samples(count, 0.0);
+    for (std::size_t i = 0; i < count; ++i)
+    {
+        const auto t = static_cast<double>(i) / sampleRate;
+        samples[i] = 0.22 * std::sin(2.0 * std::acos(-1.0) * frequencyHz * t)
+            + 0.17 * std::sin(2.0 * std::acos(-1.0) * frequencyHz * 2.0 * t)
+            + 0.12 * std::sin(2.0 * std::acos(-1.0) * frequencyHz * 3.0 * t)
+            + 0.07 * std::sin(2.0 * std::acos(-1.0) * frequencyHz * 4.0 * t);
+    }
+    return samples;
+}
+
+std::optional<apertune::PitchReading> feed(apertune::RealTimePitchDetector& detector,
+    const std::vector<double>& samples,
+    double concertA = apertune::defaultConcertAHz)
+{
+    return detector.processSamples(samples.data(), samples.size(), concertA);
 }
 
 void testCoreConversion()
@@ -281,6 +339,99 @@ void testInvalidInputs()
         "isValidFrequency: NaN");
     check(apertune::isValidFrequency(82.4068892282), "isValidFrequency: E2");
 }
+
+void testRealTimeDetectorTracksCleanNotes()
+{
+    apertune::RealTimePitchDetector detector;
+    detector.prepare(44100.0);
+
+    const auto e2 = feed(detector, renderSine(apertune::frequencyFromMidiNote(40.0), 0.18, 44100.0));
+    check(e2.has_value(), "RealTimePitchDetector: clean E2 returns reading");
+    if (e2)
+    {
+        check(e2->midiNote == 40, "RealTimePitchDetector: clean E2 maps to MIDI 40");
+        checkNear(e2->cents, 0.0, 2.0, "RealTimePitchDetector: clean E2 cents near zero");
+    }
+
+    detector.reset();
+    const auto b0 = feed(detector, renderSine(apertune::frequencyFromMidiNote(23.0), 0.24, 44100.0));
+    check(b0.has_value(), "RealTimePitchDetector: clean B0 returns reading");
+    if (b0)
+    {
+        check(b0->midiNote == 23, "RealTimePitchDetector: clean B0 maps to MIDI 23");
+        checkNear(b0->cents, 0.0, 2.5, "RealTimePitchDetector: clean B0 cents near zero");
+    }
+}
+
+void testRealTimeDetectorRejectsOvertoneWhenFundamentalPresent()
+{
+    apertune::RealTimePitchDetector detector;
+    detector.prepare(44100.0);
+
+    const auto e2Frequency = apertune::frequencyFromMidiNote(40.0);
+    const auto reading = feed(detector, renderHarmonicTone(e2Frequency, 0.20, 44100.0));
+    check(reading.has_value(), "RealTimePitchDetector: harmonic-rich E2 returns reading");
+    if (reading)
+    {
+        check(reading->midiNote == 40, "RealTimePitchDetector: harmonic-rich E2 keeps fundamental");
+        check(reading->midiNote != 52, "RealTimePitchDetector: harmonic-rich E2 is not tracked as octave overtone");
+    }
+}
+
+void testRealTimeDetectorSilenceRelease()
+{
+    apertune::PitchDetectorConfig config;
+    config.releaseHoldSeconds = 0.12;
+    config.releaseFadeSeconds = 0.12;
+    apertune::RealTimePitchDetector detector(config);
+    detector.prepare(44100.0);
+
+    const auto active = feed(detector, renderSine(440.0, 0.16, 44100.0));
+    check(active.has_value(), "RealTimePitchDetector: active tone before release");
+
+    const auto shortSilence = feed(detector, std::vector<double>(static_cast<std::size_t>(0.05 * 44100.0), 0.0));
+    check(shortSilence.has_value(), "RealTimePitchDetector: short release hold keeps reading");
+    if (shortSilence)
+        checkNear(shortSilence->visibility, 1.0, 1e-9, "RealTimePitchDetector: release hold remains visible");
+
+    const auto fadingSilence = feed(detector, std::vector<double>(static_cast<std::size_t>(0.12 * 44100.0), 0.0));
+    check(fadingSilence.has_value(), "RealTimePitchDetector: release fade keeps reading briefly");
+    if (fadingSilence)
+        check(fadingSilence->visibility > 0.0 && fadingSilence->visibility < 1.0,
+            "RealTimePitchDetector: release fade lowers visibility");
+
+    const auto longSilence = feed(detector, std::vector<double>(static_cast<std::size_t>(0.20 * 44100.0), 0.0));
+    check(!longSilence.has_value(), "RealTimePitchDetector: long silence clears reading");
+}
+
+void testRealTimeDetectorSmoothing()
+{
+    apertune::RealTimePitchDetector jitterDetector;
+    jitterDetector.prepare(44100.0);
+
+    auto reading = feed(jitterDetector,
+        renderContinuousSine({
+                                 { 440.0, 0.14 },
+                                 { pitchAtCents(69.0, 4.0), 0.03 },
+                                 { pitchAtCents(69.0, -4.0), 0.03 },
+                             },
+                             44100.0));
+    check(reading.has_value(), "RealTimePitchDetector: jitter reading exists");
+    if (reading)
+        check(std::abs(reading->cents) < 4.0, "RealTimePitchDetector: smoothing damps alternating jitter");
+
+    apertune::RealTimePitchDetector turnDetector;
+    turnDetector.prepare(44100.0);
+    reading = feed(turnDetector,
+        renderContinuousSine({
+                                 { 440.0, 0.14 },
+                                 { pitchAtCents(69.0, 28.0), 0.10 },
+                             },
+                             44100.0));
+    check(reading.has_value(), "RealTimePitchDetector: peg turn reading exists");
+    if (reading)
+        check(reading->cents > 18.0, "RealTimePitchDetector: deliberate peg turn is not over-smoothed");
+}
 } // namespace
 
 int main()
@@ -293,6 +444,10 @@ int main()
     testBoundaryFiftyCents();
     testLockState();
     testInvalidInputs();
+    testRealTimeDetectorTracksCleanNotes();
+    testRealTimeDetectorRejectsOvertoneWhenFundamentalPresent();
+    testRealTimeDetectorSilenceRelease();
+    testRealTimeDetectorSmoothing();
 
     if (failureCount > 0)
     {

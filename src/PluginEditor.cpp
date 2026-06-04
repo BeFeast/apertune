@@ -66,12 +66,13 @@ void ApertuneAudioProcessorEditor::paint(juce::Graphics& graphics)
 
     auto reading = audioProcessor.getLastPitchReading();
     const auto cents = reading ? juce::jlimit(-50.0, 50.0, reading->cents) : 0.0;
+    const auto visibility = reading ? static_cast<float>(juce::jlimit(0.0, 1.0, reading->visibility)) : 0.0f;
     const auto ballX = centerX + static_cast<float>(cents / 50.0) * (track.getWidth() * 0.5f);
-    graphics.setColour(signalRed());
+    graphics.setColour(signalRed().withAlpha(visibility));
     graphics.fillEllipse(ballX - 9.0f, track.getCentreY() - 9.0f, 18.0f, 18.0f);
 
     auto noteRow = bounds.removeFromTop(78.0f);
-    graphics.setColour(ivory());
+    graphics.setColour(ivory().withAlpha(reading ? juce::jmax(0.35f, visibility) : 0.45f));
     graphics.setFont(juce::FontOptions(44.0f, juce::Font::bold));
     graphics.drawText(reading ? juce::String(reading->noteName.data()) : juce::String("--"),
         noteRow.toNearestInt(),
