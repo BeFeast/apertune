@@ -46,8 +46,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout ApertuneAudioProcessor::crea
     parameters.push_back(std::make_unique<juce::AudioParameterFloat>(
         juce::ParameterID { concertAParameterId, 1 },
         "Concert A",
-        juce::NormalisableRange<float> { 430.0f, 450.0f, 0.1f },
-        440.0f));
+        juce::NormalisableRange<float> {
+            static_cast<float>(apertune::minConcertAHz),
+            static_cast<float>(apertune::maxConcertAHz),
+            0.1f },
+        static_cast<float>(apertune::defaultConcertAHz)));
     return { parameters.begin(), parameters.end() };
 }
 
