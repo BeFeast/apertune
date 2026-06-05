@@ -234,14 +234,18 @@ check_ui_evidence() {
 
 # --- dispatch --------------------------------------------------------------
 
-declare -A ALL_SECTIONS=(
-  [design]=check_design
-  [dsp-tests]=check_dsp_tests
-  [build-artifacts]=check_build_artifacts
-  [plugin-validation]=check_plugin_validation
-  [ui-evidence]=check_ui_evidence
-)
 SECTION_ORDER=(design dsp-tests build-artifacts plugin-validation ui-evidence)
+
+section_function() {
+  case "$1" in
+    design) printf "%s\n" check_design ;;
+    dsp-tests) printf "%s\n" check_dsp_tests ;;
+    build-artifacts) printf "%s\n" check_build_artifacts ;;
+    plugin-validation) printf "%s\n" check_plugin_validation ;;
+    ui-evidence) printf "%s\n" check_ui_evidence ;;
+    *) return 1 ;;
+  esac
+}
 
 usage() {
   sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'
@@ -264,8 +268,7 @@ fi
 printf "Apertune product verifier — %s\n\n" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 for s in "${SELECTED[@]}"; do
-  fn="${ALL_SECTIONS[$s]:-}"
-  if [[ -z "$fn" ]]; then
+  if ! fn="$(section_function "$s")"; then
     echo "unknown section: $s" >&2
     exit 2
   fi
