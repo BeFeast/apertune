@@ -72,7 +72,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout ApertuneAudioProcessor::crea
             "Guitar 7 Low B",
             "Guitar 8 Standard",
             "Guitar 9 Standard",
-            "Custom" },
+            "Custom",
+            "Drop D",
+            "Drop A",
+            "Drop E" },
         static_cast<int>(apertune::TuningPreset::guitar6Standard)));
     parameters.push_back(std::make_unique<juce::AudioParameterChoice>(
         juce::ParameterID { accidentalSpellingParameterId, 1 },
@@ -253,7 +256,29 @@ apertune::TunerSettings ApertuneAudioProcessor::getTunerSettings() const
         parameterChoice(state, tuningPresetParameterId, apertune::TuningPreset::guitar6Standard),
         settings.instrumentScope);
     settings.accidentalSpelling = parameterChoice(state, accidentalSpellingParameterId, apertune::AccidentalSpelling::sharps);
+    settings.customMidiNotes = getCustomTuning();
     return settings;
+}
+
+std::vector<int> ApertuneAudioProcessor::getCustomTuning() const
+{
+    auto tree = state.state.getChildWithName("customTuning");
+    std::vector<int> notes;
+    if (tree.isValid())
+        for (const auto& tok : juce::StringArray::fromTokens(tree.getProperty("midiNotes").toString(), ",", ""))
+            notes.push_back(tok.getIntValue());
+    if (notes.size() < 4 || notes.size() > 9)
+        notes = { 40, 45, 50, 55, 59, 64 };
+    return notes;
+}
+
+void ApertuneAudioProcessor::setCustomTuning(const std::vector<int>& midiNotes)
+{
+    juce::StringArray toks;
+    for (auto n : midiNotes)
+        toks.add(juce::String(n));
+    auto tree = state.state.getOrCreateChildWithName("customTuning", nullptr);
+    tree.setProperty("midiNotes", toks.joinIntoString(","), nullptr);
 }
 
 std::optional<apertune::PitchReading> ApertuneAudioProcessor::getLastPitchReading() const

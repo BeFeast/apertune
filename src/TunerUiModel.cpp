@@ -129,6 +129,12 @@ std::string_view tuningPresetName(TuningPreset preset) noexcept
             return "Guitar 9 Standard";
         case TuningPreset::custom:
             return "Custom";
+        case TuningPreset::dropD:
+            return "Drop D";
+        case TuningPreset::dropA:
+            return "Drop A";
+        case TuningPreset::dropE:
+            return "Drop E";
     }
 
     return "Guitar 6 Standard";
@@ -155,8 +161,11 @@ std::vector<TuningPreset> presetsForScope(InstrumentScope scope)
             return { TuningPreset::bass4Standard, TuningPreset::bass5LowB, TuningPreset::bass6Standard };
         case InstrumentScope::guitar:
             return { TuningPreset::guitar6Standard,
+                TuningPreset::dropD,
                 TuningPreset::guitar7LowB,
+                TuningPreset::dropA,
                 TuningPreset::guitar8Standard,
+                TuningPreset::dropE,
                 TuningPreset::guitar9Standard };
         case InstrumentScope::custom:
             return { TuningPreset::custom };
@@ -192,6 +201,9 @@ bool presetBelongsToScope(TuningPreset preset, InstrumentScope scope) noexcept
         case TuningPreset::guitar7LowB:
         case TuningPreset::guitar8Standard:
         case TuningPreset::guitar9Standard:
+        case TuningPreset::dropD:
+        case TuningPreset::dropA:
+        case TuningPreset::dropE:
             return scope == InstrumentScope::guitar;
         case TuningPreset::custom:
             return scope == InstrumentScope::custom;
@@ -218,6 +230,12 @@ TuningDefinition tuningDefinitionForPreset(TuningPreset preset)
             return { preset, InstrumentScope::guitar, tuningPresetName(preset), { 30, 35, 40, 45, 50, 55, 59, 64 }, { "F#", "B", "E", "A", "D", "G", "B", "E" } };
         case TuningPreset::guitar9Standard:
             return { preset, InstrumentScope::guitar, tuningPresetName(preset), { 25, 30, 35, 40, 45, 50, 55, 59, 64 }, { "C#", "F#", "B", "E", "A", "D", "G", "B", "E" } };
+        case TuningPreset::dropD:
+            return { preset, InstrumentScope::guitar, tuningPresetName(preset), { 38, 45, 50, 55, 59, 64 }, { "D", "A", "D", "G", "B", "E" } };
+        case TuningPreset::dropA:
+            return { preset, InstrumentScope::guitar, tuningPresetName(preset), { 33, 40, 45, 50, 55, 59, 64 }, { "A", "E", "A", "D", "G", "B", "E" } };
+        case TuningPreset::dropE:
+            return { preset, InstrumentScope::guitar, tuningPresetName(preset), { 28, 35, 40, 45, 50, 55, 59, 64 }, { "E", "B", "E", "A", "D", "G", "B", "E" } };
         case TuningPreset::custom:
             return { preset, InstrumentScope::custom, tuningPresetName(preset), { 40, 45, 50, 55, 59, 64 }, { "E", "A", "D", "G", "B", "E" } };
     }
@@ -261,6 +279,9 @@ TunerUiFrame makeTunerUiFrame(
     const auto state = classifyTuneState(reading, muted);
     const auto preset = coercePresetForScope(settings.tuningPreset, settings.instrumentScope);
     auto tuning = tuningDefinitionForPreset(preset);
+    if (settings.instrumentScope == InstrumentScope::custom
+        && settings.customMidiNotes.size() >= 4 && settings.customMidiNotes.size() <= 9)
+        tuning.stringMidiNotes = settings.customMidiNotes;
     tuning.stringLabels = labelsForMidiNotes(tuning.stringMidiNotes, settings.accidentalSpelling);
 
     TunerUiFrame frame;

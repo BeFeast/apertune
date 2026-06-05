@@ -49,7 +49,10 @@ enum class TuningPreset
     guitar7LowB,
     guitar8Standard,
     guitar9Standard,
-    custom
+    custom,
+    dropD,
+    dropA,
+    dropE
 };
 
 enum class AccidentalSpelling
@@ -64,6 +67,7 @@ struct TunerSettings
     InstrumentScope instrumentScope = InstrumentScope::guitar;
     TuningPreset tuningPreset = TuningPreset::guitar6Standard;
     AccidentalSpelling accidentalSpelling = AccidentalSpelling::sharps;
+    std::vector<int> customMidiNotes {};
 };
 
 struct TuningDefinition

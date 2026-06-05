@@ -42,6 +42,8 @@ public:
 
     juce::AudioProcessorValueTreeState& getState() noexcept { return state; }
     apertune::TunerSettings getTunerSettings() const;
+    std::vector<int> getCustomTuning() const;
+    void setCustomTuning(const std::vector<int>& midiNotes);
     std::optional<apertune::PitchReading> getLastPitchReading() const;
 
 private:

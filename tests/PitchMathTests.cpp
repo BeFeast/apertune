@@ -542,11 +542,22 @@ void testTunerSettingsDriveStringRows()
         "TunerSettings: bass default list ends with Bass 6");
 
     const auto guitarPresets = apertune::presetsForScope(apertune::InstrumentScope::guitar);
-    check(guitarPresets.size() == 4, "TunerSettings: guitar exposes 6-9 string presets");
+    check(guitarPresets.size() == 7, "TunerSettings: guitar exposes 6-9 presets plus drop tunings");
     check(guitarPresets.front() == apertune::TuningPreset::guitar6Standard,
         "TunerSettings: guitar default list starts with Guitar 6");
     check(guitarPresets.back() == apertune::TuningPreset::guitar9Standard,
         "TunerSettings: guitar default list ends with Guitar 9");
+    check(apertune::tuningDefinitionForPreset(apertune::TuningPreset::dropD).stringLabels
+            == std::vector<std::string>{ "D", "A", "D", "G", "B", "E" },
+        "Drop D is D A D G B E");
+    check(apertune::tuningDefinitionForPreset(apertune::TuningPreset::dropA).stringLabels.size() == 7
+            && apertune::tuningDefinitionForPreset(apertune::TuningPreset::dropA).stringLabels.front() == "A",
+        "Drop A is a 7-string tuning starting on A");
+    check(apertune::tuningDefinitionForPreset(apertune::TuningPreset::dropE).stringLabels.size() == 8
+            && apertune::tuningDefinitionForPreset(apertune::TuningPreset::dropE).stringLabels.front() == "E",
+        "Drop E is an 8-string tuning starting on E");
+    check(apertune::presetBelongsToScope(apertune::TuningPreset::dropD, apertune::InstrumentScope::guitar),
+        "Drop D belongs to the guitar scope");
 
     const auto customPresets = apertune::presetsForScope(apertune::InstrumentScope::custom);
     check(customPresets.size() == 1 && customPresets.front() == apertune::TuningPreset::custom,
@@ -577,6 +588,15 @@ void testTunerSettingsDriveStringRows()
     check(apertune::coercePresetForScope(apertune::TuningPreset::bass4Standard, apertune::InstrumentScope::guitar)
             == apertune::TuningPreset::guitar6Standard,
         "TunerSettings: invalid guitar preset coerces to default");
+
+    apertune::TunerSettings customSettings;
+    customSettings.instrumentScope = apertune::InstrumentScope::custom;
+    customSettings.tuningPreset = apertune::TuningPreset::custom;
+    customSettings.customMidiNotes = { 38, 45, 50, 55 };
+    auto customFrame = apertune::makeTunerUiFrame(std::nullopt, false, apertune::defaultConcertAHz, customSettings);
+    check(customFrame.stringLabels.size() == 4, "Custom tuning drives the chosen string count");
+    check(customFrame.stringLabels.front() == "D" && customFrame.stringLabels.back() == "G",
+        "Custom tuning maps MIDI notes to labels");
 }
 } // namespace
 
