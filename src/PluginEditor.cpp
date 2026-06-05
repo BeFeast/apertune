@@ -17,18 +17,20 @@ constexpr auto tuningPresetParameterId = "tuningPreset";
 constexpr auto accidentalSpellingParameterId = "accidentalSpelling";
 
 // ---- Direction A tokens -------------------------------------------------
-juce::Colour bg() { return juce::Colour::fromRGB(12, 13, 15); }                    // #0c0d0f
+juce::Colour bg() { return juce::Colour::fromRGB(12, 13, 15); }
 juce::Colour panelTop() { return juce::Colour::fromHSL(222.0f / 360.0f, 0.09f, 0.040f, 1.0f); }
 juce::Colour panelBottom() { return juce::Colour::fromHSL(224.0f / 360.0f, 0.11f, 0.020f, 1.0f); }
-juce::Colour textPrimary() { return juce::Colour::fromRGB(236, 238, 241); }        // #eceef1
-juce::Colour textSecondary() { return juce::Colour::fromRGB(194, 198, 204); }      // #c2c6cc
-juce::Colour textMuted() { return juce::Colour::fromRGB(108, 113, 119); }          // #6c7177
-juce::Colour iconColour() { return juce::Colour::fromRGB(139, 144, 152); }         // #8b9098
-juce::Colour stringIdle() { return juce::Colour::fromRGB(91, 97, 106); }           // #5b616a
-juce::Colour stringBorder() { return juce::Colour::fromRGB(42, 46, 52); }          // #2a2e34
-juce::Colour tickDim() { return juce::Colour::fromRGB(52, 56, 62); }               // #34383e
-juce::Colour tickMajor() { return juce::Colour::fromRGB(86, 92, 100); }            // #565c64
-juce::Colour octaveCol() { return juce::Colour::fromRGB(125, 130, 138); }          // #7d828a
+juce::Colour textPrimary() { return juce::Colour::fromRGB(236, 238, 241); }
+juce::Colour textSecondary() { return juce::Colour::fromRGB(194, 198, 204); }
+juce::Colour textMuted() { return juce::Colour::fromRGB(108, 113, 119); }
+juce::Colour iconColour() { return juce::Colour::fromRGB(139, 144, 152); }
+juce::Colour stringIdle() { return juce::Colour::fromRGB(91, 97, 106); }
+juce::Colour stringBorder() { return juce::Colour::fromRGB(42, 46, 52); }
+juce::Colour tickDim() { return juce::Colour::fromRGB(52, 56, 62); }
+juce::Colour tickMajor() { return juce::Colour::fromRGB(86, 92, 100); }
+juce::Colour octaveCol() { return juce::Colour::fromRGB(125, 130, 138); }
+juce::Colour rowName() { return juce::Colour::fromRGB(232, 234, 237); }
+juce::Colour radioIdle() { return juce::Colour::fromRGB(74, 79, 86); }
 juce::Colour grn() { return juce::Colour::fromHSL(145.0f / 360.0f, 0.88f, 0.56f, 1.0f); }
 
 juce::Colour tuneColour(const apertune::TunerUiFrame& frame)
@@ -163,22 +165,38 @@ void drawStepArrow(juce::Graphics& g, juce::Rectangle<float> a, bool up, juce::C
     g.fillPath(p);
 }
 
-void styleComboBox(juce::ComboBox& comboBox)
-{
-    comboBox.setColour(juce::ComboBox::backgroundColourId, juce::Colour::fromRGB(24, 27, 31));
-    comboBox.setColour(juce::ComboBox::outlineColourId, stringBorder());
-    comboBox.setColour(juce::ComboBox::textColourId, textPrimary());
-    comboBox.setColour(juce::ComboBox::arrowColourId, textSecondary());
-    comboBox.setColour(juce::PopupMenu::backgroundColourId, juce::Colour::fromRGB(24, 27, 31));
-    comboBox.setColour(juce::PopupMenu::textColourId, textPrimary());
-    comboBox.setColour(juce::PopupMenu::highlightedBackgroundColourId, juce::Colour::fromRGB(46, 52, 58));
-    comboBox.setColour(juce::PopupMenu::highlightedTextColourId, textPrimary());
-}
-
 void makeTransparent(juce::TextButton& b)
 {
     b.setColour(juce::TextButton::buttonColourId, juce::Colours::transparentBlack);
     b.setColour(juce::TextButton::buttonOnColourId, juce::Colours::transparentBlack);
+}
+
+// A horizontal segmented control. Fills `hits` with (cellRect, index); highlights `active`.
+void drawSegmented(juce::Graphics& g, juce::Rectangle<float> box, const juce::StringArray& labels, int active,
+                   std::vector<std::pair<juce::Rectangle<int>, int>>& hits)
+{
+    g.setColour(juce::Colours::white.withAlpha(0.13f));
+    g.drawRoundedRectangle(box, 8.0f, 1.0f);
+    const auto cellW = box.getWidth() / static_cast<float>(labels.size());
+    for (int i = 0; i < labels.size(); ++i)
+    {
+        auto cell = box.withWidth(cellW).translated(static_cast<float>(i) * cellW, 0.0f);
+        const auto on = i == active;
+        if (on)
+        {
+            g.setColour(grn().withAlpha(0.15f));
+            g.fillRoundedRectangle(cell.reduced(1.5f), 6.5f);
+        }
+        if (i > 0)
+        {
+            g.setColour(juce::Colours::white.withAlpha(0.08f));
+            g.drawLine(cell.getX(), box.getY() + 5.0f, cell.getX(), box.getBottom() - 5.0f, 1.0f);
+        }
+        g.setColour(on ? grn() : iconColour());
+        g.setFont(grotesk(12.0f, 500));
+        g.drawText(labels[i], cell.toNearestInt(), juce::Justification::centred);
+        hits.push_back({ cell.toNearestInt(), i });
+    }
 }
 } // namespace
 
@@ -191,7 +209,6 @@ ApertuneAudioProcessorEditor::ApertuneAudioProcessorEditor(ApertuneAudioProcesso
     setSize(600, 460);
     grainImage = makeGrain();
 
-    // Speaker (mute) — transparent toggle; icon painted, parameter held by the attachment.
     muteButton.setColour(juce::ToggleButton::textColourId, juce::Colours::transparentBlack);
     muteButton.setColour(juce::ToggleButton::tickColourId, juce::Colours::transparentBlack);
     muteButton.setColour(juce::ToggleButton::tickDisabledColourId, juce::Colours::transparentBlack);
@@ -222,43 +239,15 @@ ApertuneAudioProcessorEditor::ApertuneAudioProcessorEditor(ApertuneAudioProcesso
     addAndMakeVisible(refUpButton);
     addAndMakeVisible(refDownButton);
 
-    // Settings (interim generic panel — replaced by the faithful picker in Step 3).
     concertASlider.setSliderStyle(juce::Slider::LinearHorizontal);
-    concertASlider.setTextBoxStyle(juce::Slider::TextBoxRight, false, 72, 22);
-    concertASlider.setTextValueSuffix(" Hz");
-    concertASlider.setColour(juce::Slider::trackColourId, grn().withAlpha(0.55f));
-    concertASlider.setColour(juce::Slider::backgroundColourId, juce::Colour::fromRGB(38, 42, 47));
-    concertASlider.setColour(juce::Slider::thumbColourId, textPrimary());
-    concertASlider.setColour(juce::Slider::textBoxTextColourId, textPrimary());
-    concertASlider.setColour(juce::Slider::textBoxOutlineColourId, stringBorder());
+    concertASlider.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
+    concertASlider.setColour(juce::Slider::trackColourId, grn());
+    concertASlider.setColour(juce::Slider::backgroundColourId, juce::Colour::fromRGB(38, 41, 46));
+    concertASlider.setColour(juce::Slider::thumbColourId, juce::Colours::white);
     addAndMakeVisible(concertASlider);
-
-    instrumentScopeBox.addItem(juce::String(apertune::instrumentScopeName(apertune::InstrumentScope::bass).data()), 1);
-    instrumentScopeBox.addItem(juce::String(apertune::instrumentScopeName(apertune::InstrumentScope::guitar).data()), 2);
-    instrumentScopeBox.addItem(juce::String(apertune::instrumentScopeName(apertune::InstrumentScope::custom).data()), 3);
-    accidentalSpellingBox.addItem(juce::String(apertune::accidentalSpellingName(apertune::AccidentalSpelling::sharps).data()), 1);
-    accidentalSpellingBox.addItem(juce::String(apertune::accidentalSpellingName(apertune::AccidentalSpelling::flats).data()), 2);
-
-    for (auto* comboBox : { &instrumentScopeBox, &tuningPresetBox, &accidentalSpellingBox })
-    {
-        styleComboBox(*comboBox);
-        addAndMakeVisible(*comboBox);
-    }
-
-    instrumentScopeAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
-        audioProcessor.getState(), instrumentScopeParameterId, instrumentScopeBox);
-    accidentalSpellingAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
-        audioProcessor.getState(), accidentalSpellingParameterId, accidentalSpellingBox);
 
     audioProcessor.getState().addParameterListener(tuningPresetParameterId, this);
     audioProcessor.getState().addParameterListener(instrumentScopeParameterId, this);
-
-    instrumentScopeBox.onChange = [this] { refreshPresetItems(); coercePresetForSelectedScope(); repaint(); };
-    tuningPresetBox.onChange = [this] { updatePresetParameterFromCombo(); repaint(); };
-    accidentalSpellingBox.onChange = [this] { repaint(); };
-
-    refreshPresetItems();
-    syncPresetComboToParameter();
 
     setSettingsVisible(false);
     startTimerHz(30);
@@ -291,6 +280,42 @@ void ApertuneAudioProcessorEditor::nudgeConcertA(float deltaHz)
     repaint();
 }
 
+void ApertuneAudioProcessorEditor::setInstrumentScope(int scopeIndex)
+{
+    auto& state = audioProcessor.getState();
+    if (auto* p = state.getParameter(instrumentScopeParameterId))
+        p->setValueNotifyingHost(p->convertTo0to1(static_cast<float>(scopeIndex)));
+    const auto scope = static_cast<apertune::InstrumentScope>(scopeIndex);
+    const auto coerced = apertune::coercePresetForScope(audioProcessor.getTunerSettings().tuningPreset, scope);
+    if (auto* tp = state.getParameter(tuningPresetParameterId))
+        tp->setValueNotifyingHost(tp->convertTo0to1(static_cast<float>(static_cast<int>(coerced))));
+    repaint();
+}
+
+void ApertuneAudioProcessorEditor::setTuningPreset(int presetIndex)
+{
+    if (auto* p = audioProcessor.getState().getParameter(tuningPresetParameterId))
+        p->setValueNotifyingHost(p->convertTo0to1(static_cast<float>(presetIndex)));
+    repaint();
+}
+
+void ApertuneAudioProcessorEditor::setAccidental(int spellingIndex)
+{
+    if (auto* p = audioProcessor.getState().getParameter(accidentalSpellingParameterId))
+        p->setValueNotifyingHost(p->convertTo0to1(static_cast<float>(spellingIndex)));
+    repaint();
+}
+
+void ApertuneAudioProcessorEditor::mouseDown(const juce::MouseEvent& event)
+{
+    if (!showSettings)
+        return;
+    const auto pos = event.getPosition();
+    for (const auto& h : instrumentHits) if (h.first.contains(pos)) { setInstrumentScope(h.second); return; }
+    for (const auto& h : tuningHits)     if (h.first.contains(pos)) { setTuningPreset(h.second); return; }
+    for (const auto& h : accidentalHits) if (h.first.contains(pos)) { setAccidental(h.second); return; }
+}
+
 void ApertuneAudioProcessorEditor::setSettingsVisible(bool shouldShow)
 {
     showSettings = shouldShow;
@@ -303,9 +328,6 @@ void ApertuneAudioProcessorEditor::setSettingsVisible(bool shouldShow)
     refDownButton.setVisible(!shouldShow);
 
     concertASlider.setVisible(shouldShow);
-    instrumentScopeBox.setVisible(shouldShow);
-    tuningPresetBox.setVisible(shouldShow);
-    accidentalSpellingBox.setVisible(shouldShow);
 
     repaint();
 }
@@ -328,7 +350,6 @@ void ApertuneAudioProcessorEditor::paintTunerFace(juce::Graphics& graphics, juce
     const auto frame = apertune::makeTunerUiFrame(audioProcessor.getLastPitchReading(), muted, concertA, settings);
     const auto accent = tuneColour(frame);
 
-    // panel background + top highlight + grain
     juce::ColourGradient grad(panelTop(), panelBounds.getX(), panelBounds.getY(), panelBottom(), panelBounds.getX(), panelBounds.getBottom(), false);
     graphics.setGradientFill(grad);
     graphics.fillRect(panelBounds);
@@ -336,10 +357,9 @@ void ApertuneAudioProcessorEditor::paintTunerFace(juce::Graphics& graphics, juce
                             juce::Colours::transparentWhite, panelBounds.getCentreX(), panelBounds.getY() + panelBounds.getHeight() * 0.55f, false);
     graphics.setGradientFill(hi);
     graphics.fillRect(panelBounds);
-    graphics.setTiledImageFill(grainImage, 0, 0, 0.06f);
+    graphics.setTiledImageFill(grainImage, 0, 0, 0.05f);
     graphics.fillRect(panelBounds);
 
-    // title bar
     auto titleBar = panelBounds.removeFromTop(50.0f);
     graphics.setColour(juce::Colours::white.withAlpha(0.025f));
     graphics.fillRect(titleBar);
@@ -351,11 +371,10 @@ void ApertuneAudioProcessorEditor::paintTunerFace(juce::Graphics& graphics, juce
     drawSpeaker(graphics, muteButton.getBounds().toFloat().reduced(3.0f), muted ? textMuted() : iconColour(), muted);
     drawGearIcon(graphics, settingsButton.getBounds().toFloat().reduced(3.0f), iconColour());
 
-    // lock glow over the whole panel
     if (frame.inLock)
     {
         graphics.setColour(accent.withAlpha(0.55f));
-        graphics.drawRect(panelBounds.expanded(0.0f, 50.0f).withTop(0.0f), 1.5f);
+        graphics.drawRect(getLocalBounds().toFloat(), 1.5f);
         for (int i = 1; i <= 5; ++i)
         {
             graphics.setColour(accent.withAlpha(0.05f * static_cast<float>(6 - i)));
@@ -366,12 +385,11 @@ void ApertuneAudioProcessorEditor::paintTunerFace(juce::Graphics& graphics, juce
     const auto bodyLeft = 30.0f, bodyRight = panelBounds.getRight() - 30.0f, bodyW = bodyRight - bodyLeft;
     const auto centreX = (bodyLeft + bodyRight) * 0.5f;
 
-    // string-target row
     {
         auto row = juce::Rectangle<float>(bodyLeft, 84.0f, bodyW, 30.0f);
         const auto n = static_cast<int>(frame.stringLabels.size());
         const auto chip = 30.0f, gap = 10.0f;
-        const auto total = chip * static_cast<float>(n) + gap * static_cast<float>(n - 1);
+        const auto total = chip * static_cast<float>(n) + gap * static_cast<float>(juce::jmax(0, n - 1));
         auto x = row.getCentreX() - total * 0.5f;
         for (int i = 0; i < n; ++i)
         {
@@ -391,7 +409,6 @@ void ApertuneAudioProcessorEditor::paintTunerFace(juce::Graphics& graphics, juce
         }
     }
 
-    // cents scale row
     {
         auto row = juce::Rectangle<float>(bodyLeft, 126.0f, bodyW, 30.0f);
         graphics.setFont(mono(14.0f));
@@ -408,7 +425,6 @@ void ApertuneAudioProcessorEditor::paintTunerFace(juce::Graphics& graphics, juce
         }
     }
 
-    // tick track + reticle + ball
     {
         auto track = juce::Rectangle<float>(bodyLeft, 168.0f, bodyW, 150.0f);
         const auto cy = track.getCentreY();
@@ -441,7 +457,6 @@ void ApertuneAudioProcessorEditor::paintTunerFace(juce::Graphics& graphics, juce
         graphics.drawEllipse(ball.reduced(9.0f), frame.inLock ? 2.0f : 1.2f);
     }
 
-    // note row
     {
         auto row = juce::Rectangle<float>(bodyLeft, 322.0f, bodyW, 86.0f);
         graphics.setFont(grotesk(19.0f, 500));
@@ -470,7 +485,6 @@ void ApertuneAudioProcessorEditor::paintTunerFace(juce::Graphics& graphics, juce
         }
     }
 
-    // footer: unit toggle | Hz readout | reference field
     {
         const auto toggle = unitCentsButton.getBounds().toFloat().getUnion(unitHzButton.getBounds().toFloat());
         graphics.setColour(juce::Colours::white.withAlpha(0.13f));
@@ -490,11 +504,10 @@ void ApertuneAudioProcessorEditor::paintTunerFace(juce::Graphics& graphics, juce
         seg(unitCentsButton.getBounds().toFloat(), "Cents", centsOn);
         seg(unitHzButton.getBounds().toFloat(), "Hz", !centsOn);
 
-        const auto footerY = toggle.getCentreY();
         graphics.setFont(mono(15.0f));
         graphics.setColour(textSecondary());
         const auto hzText = (frame.hasSignal || frame.muted) ? juce::String(frame.frequencyHz, 1) + " Hz" : juce::String("--.- Hz");
-        graphics.drawText(hzText, juce::Rectangle<float>(centreX - 80.0f, footerY - 12.0f, 160.0f, 24.0f).toNearestInt(), juce::Justification::centred);
+        graphics.drawText(hzText, juce::Rectangle<float>(centreX - 80.0f, toggle.getCentreY() - 12.0f, 160.0f, 24.0f).toNearestInt(), juce::Justification::centred);
 
         const auto stepBox = refUpButton.getBounds().toFloat().getUnion(refDownButton.getBounds().toFloat());
         const auto refBox = juce::Rectangle<float>(stepBox.getRight() - 86.0f, toggle.getY(), 86.0f, toggle.getHeight());
@@ -502,8 +515,7 @@ void ApertuneAudioProcessorEditor::paintTunerFace(juce::Graphics& graphics, juce
         graphics.drawRoundedRectangle(refBox, 8.0f, 1.0f);
         graphics.setFont(mono(14.0f));
         graphics.setColour(textPrimary());
-        graphics.drawText(juce::String(concertA, 1),
-                          refBox.withTrimmedRight(20.0f).withTrimmedLeft(10.0f).toNearestInt(), juce::Justification::centredLeft);
+        graphics.drawText(juce::String(concertA, 1), refBox.withTrimmedRight(20.0f).withTrimmedLeft(10.0f).toNearestInt(), juce::Justification::centredLeft);
         drawStepArrow(graphics, refUpButton.getBounds().toFloat(), true, textMuted());
         drawStepArrow(graphics, refDownButton.getBounds().toFloat(), false, textMuted());
     }
@@ -514,7 +526,7 @@ void ApertuneAudioProcessorEditor::paintSettingsPanel(juce::Graphics& graphics, 
     juce::ColourGradient grad(panelTop(), panelBounds.getX(), panelBounds.getY(), panelBottom(), panelBounds.getX(), panelBounds.getBottom(), false);
     graphics.setGradientFill(grad);
     graphics.fillRect(panelBounds);
-    graphics.setTiledImageFill(grainImage, 0, 0, 0.06f);
+    graphics.setTiledImageFill(grainImage, 0, 0, 0.05f);
     graphics.fillRect(panelBounds);
 
     auto titleBar = panelBounds.removeFromTop(50.0f);
@@ -524,22 +536,100 @@ void ApertuneAudioProcessorEditor::paintSettingsPanel(juce::Graphics& graphics, 
     graphics.drawLine(titleBar.getX(), titleBar.getBottom(), titleBar.getRight(), titleBar.getBottom(), 1.0f);
     graphics.setColour(textPrimary());
     graphics.setFont(grotesk(16.0f, 600));
-    graphics.drawText("Tuner \xc2\xb7 Settings", titleBar.withTrimmedLeft(22.0f).toNearestInt(), juce::Justification::centredLeft);
+    graphics.drawText(juce::String::fromUTF8("Tuner \xc2\xb7 Settings"), titleBar.withTrimmedLeft(22.0f).toNearestInt(), juce::Justification::centredLeft);
     drawClose(graphics, closeSettingsButton.getBounds().toFloat().reduced(4.0f), iconColour());
 
-    const auto labelLeft = panelBounds.getX() + 30.0f;
-    graphics.setFont(grotesk(14.0f, 500));
-    graphics.setColour(textSecondary());
-    auto label = [&](const juce::String& text, const juce::Component& c)
+    instrumentHits.clear();
+    tuningHits.clear();
+    accidentalHits.clear();
+
+    const auto settings = audioProcessor.getTunerSettings();
+    const auto concertA = static_cast<double>(*audioProcessor.getState().getRawParameterValue(concertAParameterId));
+    const auto bodyLeft = 30.0f, bodyW = panelBounds.getRight() - 30.0f - bodyLeft;
+
+    auto sectionLabel = [&](const juce::String& text, float y)
     {
-        const auto cb = c.getBounds().toFloat();
-        graphics.drawText(text, juce::Rectangle<float>(labelLeft, cb.getY(), cb.getX() - labelLeft - 14.0f, cb.getHeight()).toNearestInt(),
-                          juce::Justification::centredLeft);
+        graphics.setColour(textMuted());
+        graphics.setFont(grotesk(11.0f, 600).withExtraKerningFactor(0.14f));
+        graphics.drawText(text.toUpperCase(), juce::Rectangle<float>(bodyLeft, y, bodyW, 16.0f).toNearestInt(), juce::Justification::centredLeft);
     };
-    label("Reference A", concertASlider);
-    label("Instrument", instrumentScopeBox);
-    label("Tuning", tuningPresetBox);
-    label("Accidentals", accidentalSpellingBox);
+
+    // Reference pitch
+    sectionLabel("Reference pitch", 82.0f);
+    graphics.setColour(juce::Colours::white);
+    graphics.setFont(mono(30.0f, true));
+    graphics.drawText(juce::String(concertA, 1), juce::Rectangle<float>(bodyLeft, 102.0f, 110.0f, 40.0f).toNearestInt(), juce::Justification::centredLeft);
+    graphics.setColour(textMuted());
+    graphics.setFont(mono(13.0f));
+    graphics.drawText("Hz", juce::Rectangle<float>(bodyLeft + 96.0f, 114.0f, 24.0f, 20.0f).toNearestInt(), juce::Justification::centredLeft);
+    {
+        const auto sb = concertASlider.getBounds().toFloat();
+        graphics.setFont(mono(11.0f));
+        graphics.setColour(textMuted());
+        graphics.drawText("432", juce::Rectangle<float>(sb.getX(), sb.getBottom(), 40.0f, 14.0f).toNearestInt(), juce::Justification::centredLeft);
+        graphics.drawText("440", juce::Rectangle<float>(sb.getCentreX() - 20.0f, sb.getBottom(), 40.0f, 14.0f).toNearestInt(), juce::Justification::centred);
+        graphics.drawText("448", juce::Rectangle<float>(sb.getRight() - 40.0f, sb.getBottom(), 40.0f, 14.0f).toNearestInt(), juce::Justification::centredRight);
+    }
+
+    // Tuning preset
+    sectionLabel("Tuning preset", 162.0f);
+    drawSegmented(graphics, juce::Rectangle<float>(bodyLeft, 182.0f, bodyW, 32.0f),
+                  { juce::String::fromUTF8("Bass \xc2\xb7 4-6"),
+                    juce::String::fromUTF8("Guitar \xc2\xb7 6-9"),
+                    "Custom" },
+                  static_cast<int>(settings.instrumentScope), instrumentHits);
+
+    auto y = 224.0f;
+    const auto rowH = 34.0f, rowGap = 6.0f;
+    for (const auto preset : apertune::presetsForScope(settings.instrumentScope))
+    {
+        const auto def = apertune::tuningDefinitionForPreset(preset);
+        juce::String notes;
+        for (const auto& s : def.stringLabels)
+            notes += (notes.isEmpty() ? "" : " ") + juce::String(s);
+        const auto row = juce::Rectangle<float>(bodyLeft, y, bodyW, rowH);
+        const auto on = preset == settings.tuningPreset;
+        if (on)
+        {
+            graphics.setColour(grn().withAlpha(0.09f));
+            graphics.fillRoundedRectangle(row, 8.0f);
+            graphics.setColour(grn().withAlpha(0.55f));
+            graphics.drawRoundedRectangle(row, 8.0f, 1.0f);
+        }
+        else
+        {
+            graphics.setColour(juce::Colours::white.withAlpha(0.03f));
+            graphics.fillRoundedRectangle(row, 8.0f);
+        }
+        const auto radio = juce::Rectangle<float>(row.getX() + 12.0f, row.getCentreY() - 8.0f, 16.0f, 16.0f);
+        graphics.setColour(on ? grn() : radioIdle());
+        graphics.drawEllipse(radio, 1.6f);
+        if (on)
+        {
+            graphics.setColour(grn());
+            graphics.fillEllipse(radio.withSizeKeepingCentre(8.0f, 8.0f));
+        }
+        graphics.setColour(rowName());
+        graphics.setFont(grotesk(15.0f, 500));
+        graphics.drawText(juce::String(apertune::tuningPresetName(preset).data()),
+                          juce::Rectangle<float>(radio.getRight() + 12.0f, row.getY(), 134.0f, rowH).toNearestInt(), juce::Justification::centredLeft);
+        graphics.setColour(iconColour());
+        graphics.setFont(mono(13.0f));
+        graphics.drawText(notes, juce::Rectangle<float>(radio.getRight() + 150.0f, row.getY(),
+                          row.getRight() - (radio.getRight() + 150.0f) - 56.0f, rowH).toNearestInt(), juce::Justification::centredLeft);
+        graphics.setColour(textMuted());
+        graphics.setFont(mono(11.0f));
+        graphics.drawText(juce::String(static_cast<int>(def.stringLabels.size())) + " str",
+                          row.withTrimmedRight(12.0f).toNearestInt(), juce::Justification::centredRight);
+        tuningHits.push_back({ row.toNearestInt(), static_cast<int>(preset) });
+        y += rowH + rowGap;
+    }
+
+    // Accidentals
+    const auto accLabelY = juce::jmin(y + 6.0f, panelBounds.getBottom() - 70.0f);
+    sectionLabel("Accidentals", accLabelY);
+    drawSegmented(graphics, juce::Rectangle<float>(bodyLeft, accLabelY + 20.0f, 200.0f, 30.0f),
+                  { "Sharps", "Flats" }, static_cast<int>(settings.accidentalSpelling), accidentalHits);
 }
 
 void ApertuneAudioProcessorEditor::resized()
@@ -555,7 +645,6 @@ void ApertuneAudioProcessorEditor::resized()
     settingsButton.setBounds(rightIcon);
     closeSettingsButton.setBounds(rightIcon);
 
-    // footer controls (tuner face)
     const int bodyLeft = 30, bodyRight = getWidth() - 30;
     auto footer = juce::Rectangle<int>(bodyLeft, 406, bodyRight - bodyLeft, 32);
     unitCentsButton.setBounds(footer.getX(), footer.getY(), 64, 32);
@@ -565,66 +654,15 @@ void ApertuneAudioProcessorEditor::resized()
     refUpButton.setBounds(steppers.removeFromTop(steppers.getHeight() / 2));
     refDownButton.setBounds(steppers);
 
-    // settings rows
-    auto content = full.reduced(30, 0);
-    content.removeFromTop(30);
-    auto nextRow = [&content] { auto r = content.removeFromTop(40); content.removeFromTop(18); return r; };
-    concertASlider.setBounds(nextRow().removeFromRight(300));
-    instrumentScopeBox.setBounds(nextRow().removeFromRight(300));
-    tuningPresetBox.setBounds(nextRow().removeFromRight(300));
-    accidentalSpellingBox.setBounds(nextRow().removeFromRight(300));
+    // settings reference slider (to the right of the big value)
+    concertASlider.setBounds(bodyLeft + 150, 108, (bodyRight - (bodyLeft + 150)), 22);
 }
 
-void ApertuneAudioProcessorEditor::refreshPresetItems()
+void ApertuneAudioProcessorEditor::parameterChanged(const juce::String&, float)
 {
-    const auto selectedScope = static_cast<apertune::InstrumentScope>(std::max(0, instrumentScopeBox.getSelectedItemIndex()));
-    const auto selectedId = tuningPresetBox.getSelectedId();
-    tuningPresetBox.clear(juce::dontSendNotification);
-    for (const auto preset : apertune::presetsForScope(selectedScope))
-        tuningPresetBox.addItem(juce::String(apertune::tuningPresetName(preset).data()), static_cast<int>(preset) + 1);
-    if (selectedId > 0 && tuningPresetBox.indexOfItemId(selectedId) >= 0)
-        tuningPresetBox.setSelectedId(selectedId, juce::dontSendNotification);
-}
-
-void ApertuneAudioProcessorEditor::coercePresetForSelectedScope()
-{
-    const auto selectedScope = static_cast<apertune::InstrumentScope>(std::max(0, instrumentScopeBox.getSelectedItemIndex()));
-    const auto selectedPreset = static_cast<apertune::TuningPreset>(std::max(0, tuningPresetBox.getSelectedId() - 1));
-    const auto coercedPreset = apertune::coercePresetForScope(selectedPreset, selectedScope);
-    tuningPresetBox.setSelectedId(static_cast<int>(coercedPreset) + 1, juce::sendNotificationSync);
-}
-
-void ApertuneAudioProcessorEditor::updatePresetParameterFromCombo()
-{
-    if (tuningPresetBox.getSelectedId() <= 0)
-        return;
-    if (auto* parameter = audioProcessor.getState().getParameter(tuningPresetParameterId))
+    juce::MessageManager::callAsync([safeThis = juce::Component::SafePointer<ApertuneAudioProcessorEditor>(this)]
     {
-        const auto presetIndex = static_cast<float>(tuningPresetBox.getSelectedId() - 1);
-        parameter->beginChangeGesture();
-        parameter->setValueNotifyingHost(parameter->convertTo0to1(presetIndex));
-        parameter->endChangeGesture();
-    }
-}
-
-void ApertuneAudioProcessorEditor::syncPresetComboToParameter()
-{
-    const auto settings = audioProcessor.getTunerSettings();
-    refreshPresetItems();
-    tuningPresetBox.setSelectedId(static_cast<int>(settings.tuningPreset) + 1, juce::dontSendNotification);
-}
-
-void ApertuneAudioProcessorEditor::parameterChanged(const juce::String& parameterID, float)
-{
-    if (parameterID == tuningPresetParameterId || parameterID == instrumentScopeParameterId)
-    {
-        juce::MessageManager::callAsync([safeThis = juce::Component::SafePointer<ApertuneAudioProcessorEditor>(this)]
-        {
-            if (safeThis != nullptr)
-            {
-                safeThis->syncPresetComboToParameter();
-                safeThis->repaint();
-            }
-        });
-    }
+        if (safeThis != nullptr)
+            safeThis->repaint();
+    });
 }

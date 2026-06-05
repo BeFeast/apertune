@@ -5,6 +5,8 @@
 #include "PluginProcessor.h"
 
 #include <memory>
+#include <utility>
+#include <vector>
 
 class ApertuneAudioProcessorEditor final
     : public juce::AudioProcessorEditor,
@@ -17,6 +19,7 @@ public:
 
     void paint(juce::Graphics& graphics) override;
     void resized() override;
+    void mouseDown(const juce::MouseEvent& event) override;
 
 private:
     void timerCallback() override;
@@ -28,6 +31,9 @@ private:
 
     void setDisplayUnit(int unitIndex);
     void nudgeConcertA(float deltaHz);
+    void setInstrumentScope(int scopeIndex);
+    void setTuningPreset(int presetIndex);
+    void setAccidental(int spellingIndex);
 
     ApertuneAudioProcessor& audioProcessor;
 
@@ -35,31 +41,25 @@ private:
     juce::Image grainImage;
 
     // Title-bar chrome (transparent hit targets; icons are painted).
-    juce::ToggleButton muteButton;        // speaker; toggles the mute parameter
-    juce::TextButton settingsButton;       // gear; opens settings
-    juce::TextButton closeSettingsButton;  // close X; returns to the tuner face
+    juce::ToggleButton muteButton;
+    juce::TextButton settingsButton;
+    juce::TextButton closeSettingsButton;
 
     // Footer controls on the tuner face.
-    juce::TextButton unitCentsButton;      // Cents segment of the unit toggle
-    juce::TextButton unitHzButton;         // Hz segment of the unit toggle
-    juce::TextButton refUpButton;          // reference-pitch stepper up
-    juce::TextButton refDownButton;        // reference-pitch stepper down
+    juce::TextButton unitCentsButton;
+    juce::TextButton unitHzButton;
+    juce::TextButton refUpButton;
+    juce::TextButton refDownButton;
 
-    // Settings controls (still the interim generic panel; faithful picker is Step 3).
+    // Settings reference slider (APVTS-attached). The instrument/tuning/accidental
+    // controls are painted and dispatched through mouseDown against these hit lists.
     juce::Slider concertASlider;
-    juce::ComboBox instrumentScopeBox;
-    juce::ComboBox tuningPresetBox;
-    juce::ComboBox accidentalSpellingBox;
+    std::vector<std::pair<juce::Rectangle<int>, int>> instrumentHits;
+    std::vector<std::pair<juce::Rectangle<int>, int>> tuningHits;
+    std::vector<std::pair<juce::Rectangle<int>, int>> accidentalHits;
 
     juce::AudioProcessorValueTreeState::ButtonAttachment muteAttachment;
     juce::AudioProcessorValueTreeState::SliderAttachment concertAAttachment;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> instrumentScopeAttachment;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> accidentalSpellingAttachment;
-
-    void refreshPresetItems();
-    void coercePresetForSelectedScope();
-    void updatePresetParameterFromCombo();
-    void syncPresetComboToParameter();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ApertuneAudioProcessorEditor)
 };
