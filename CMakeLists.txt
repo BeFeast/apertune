@@ -57,6 +57,15 @@ juce_add_plugin(Apertune
     COPY_PLUGIN_AFTER_BUILD FALSE
     FORMATS ${APERTUNE_PLUGIN_FORMATS})
 
+juce_add_binary_data(ApertuneFonts
+    SOURCES
+        assets/fonts/SpaceGrotesk-500.ttf
+        assets/fonts/SpaceGrotesk-600.ttf
+        assets/fonts/SpaceGrotesk-700.ttf
+        assets/fonts/SpaceMono-Regular.ttf
+        assets/fonts/SpaceMono-Bold.ttf
+        assets/fonts/ArchivoBlack-Regular.ttf)
+
 target_sources(Apertune
     PRIVATE
         src/PluginEditor.cpp
@@ -72,6 +81,7 @@ target_link_libraries(Apertune
     PRIVATE
         apertune_core
         juce::juce_audio_utils
+        ApertuneFonts
     PUBLIC
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags
