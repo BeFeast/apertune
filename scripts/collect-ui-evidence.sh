@@ -82,26 +82,31 @@ declare -a ANCHOR_NAMES=(
   note_row
   footer_controls
 )
-declare -A ANCHOR_PATTERNS=(
-  [title_bar]="tn-titlebar"
-  [string_row]="tn-strings"
-  [cents_scale]="tn-cents"
-  [ticks_track]="tn-ticks"
-  [center_axis]="tn-atick"
-  [reticle]="tn-reticle"
-  [indicator_ball]="tn-ball"
-  [note_row]="tn-noterow"
-  [footer_controls]="tn-footer"
-)
 
-declare -A ANCHOR_PRESENT
+anchor_pattern() {
+  case "$1" in
+    title_bar) printf "%s\n" "tn-titlebar" ;;
+    string_row) printf "%s\n" "tn-strings" ;;
+    cents_scale) printf "%s\n" "tn-cents" ;;
+    ticks_track) printf "%s\n" "tn-ticks" ;;
+    center_axis) printf "%s\n" "tn-atick" ;;
+    reticle) printf "%s\n" "tn-reticle" ;;
+    indicator_ball) printf "%s\n" "tn-ball" ;;
+    note_row) printf "%s\n" "tn-noterow" ;;
+    footer_controls) printf "%s\n" "tn-footer" ;;
+    *) return 1 ;;
+  esac
+}
+
+declare -a ANCHOR_PRESENT
 missing_anchors=()
-for name in "${ANCHOR_NAMES[@]}"; do
-  pattern="${ANCHOR_PATTERNS[$name]}"
+for i in "${!ANCHOR_NAMES[@]}"; do
+  name="${ANCHOR_NAMES[$i]}"
+  pattern="$(anchor_pattern "$name")"
   if grep -q -- "$pattern" "$studio"; then
-    ANCHOR_PRESENT[$name]=true
+    ANCHOR_PRESENT[$i]=true
   else
-    ANCHOR_PRESENT[$name]=false
+    ANCHOR_PRESENT[$i]=false
     missing_anchors+=("$name")
   fi
 done
@@ -115,10 +120,11 @@ captured_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
 json_anchors() {
   local first=1 out="{"
-  local name
-  for name in "${ANCHOR_NAMES[@]}"; do
+  local i name
+  for i in "${!ANCHOR_NAMES[@]}"; do
+    name="${ANCHOR_NAMES[$i]}"
     if (( first )); then first=0; else out+=","; fi
-    out+="\"$name\":${ANCHOR_PRESENT[$name]}"
+    out+="\"$name\":${ANCHOR_PRESENT[$i]}"
   done
   out+="}"
   printf "%s" "$out"
