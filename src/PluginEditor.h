@@ -20,6 +20,7 @@ public:
     void paint(juce::Graphics& graphics) override;
     void resized() override;
     void mouseDown(const juce::MouseEvent& event) override;
+    void mouseWheelMove(const juce::MouseEvent& event, const juce::MouseWheelDetails& wheel) override;
 
 private:
     void timerCallback() override;
@@ -37,6 +38,8 @@ private:
 
     bool showSettings { false };
     juce::Image grainImage;
+    float tuningScroll { 0.0f };
+    float tuningMaxScroll { 0.0f };
 
     // Title-bar chrome (transparent hit targets; icons are painted).
     juce::ToggleButton muteButton;

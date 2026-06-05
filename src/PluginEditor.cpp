@@ -256,6 +256,7 @@ void ApertuneAudioProcessorEditor::setInstrumentScope(int scopeIndex)
     const auto coerced = apertune::coercePresetForScope(audioProcessor.getTunerSettings().tuningPreset, scope);
     if (auto* tp = state.getParameter(tuningPresetParameterId))
         tp->setValueNotifyingHost(tp->convertTo0to1(static_cast<float>(static_cast<int>(coerced))));
+    tuningScroll = 0.0f;
     repaint();
 }
 
@@ -281,6 +282,14 @@ void ApertuneAudioProcessorEditor::mouseDown(const juce::MouseEvent& event)
     for (const auto& h : instrumentHits) if (h.first.contains(pos)) { setInstrumentScope(h.second); return; }
     for (const auto& h : tuningHits)     if (h.first.contains(pos)) { setTuningPreset(h.second); return; }
     for (const auto& h : accidentalHits) if (h.first.contains(pos)) { setAccidental(h.second); return; }
+}
+
+void ApertuneAudioProcessorEditor::mouseWheelMove(const juce::MouseEvent&, const juce::MouseWheelDetails& wheel)
+{
+    if (!showSettings || tuningMaxScroll <= 0.0f)
+        return;
+    tuningScroll = juce::jlimit(0.0f, tuningMaxScroll, tuningScroll - wheel.deltaY * 90.0f);
+    repaint();
 }
 
 void ApertuneAudioProcessorEditor::setSettingsVisible(bool shouldShow)
@@ -507,15 +516,24 @@ void ApertuneAudioProcessorEditor::paintSettingsPanel(juce::Graphics& graphics, 
                     "Custom" },
                   static_cast<int>(settings.instrumentScope), instrumentHits);
 
-    auto y = 224.0f;
     const auto rowH = 34.0f, rowGap = 6.0f;
-    for (const auto preset : apertune::presetsForScope(settings.instrumentScope))
+    const auto listTop = 224.0f, listBottom = 344.0f;
+    const auto presets = apertune::presetsForScope(settings.instrumentScope);
+    const auto contentH = static_cast<float>(presets.size()) * (rowH + rowGap) - rowGap;
+    tuningMaxScroll = juce::jmax(0.0f, contentH - (listBottom - listTop));
+    tuningScroll = juce::jlimit(0.0f, tuningMaxScroll, tuningScroll);
+    const auto listW = bodyW - (tuningMaxScroll > 0.0f ? 12.0f : 0.0f);
+
+    graphics.saveState();
+    graphics.reduceClipRegion(juce::Rectangle<float>(bodyLeft, listTop, bodyW, listBottom - listTop).toNearestInt());
+    auto y = listTop - tuningScroll;
+    for (const auto preset : presets)
     {
         const auto def = apertune::tuningDefinitionForPreset(preset);
         juce::String notes;
         for (const auto& s : def.stringLabels)
             notes += (notes.isEmpty() ? "" : " ") + juce::String(s);
-        const auto row = juce::Rectangle<float>(bodyLeft, y, bodyW, rowH);
+        const auto row = juce::Rectangle<float>(bodyLeft, y, listW, rowH);
         const auto on = preset == settings.tuningPreset;
         if (on)
         {
@@ -549,13 +567,25 @@ void ApertuneAudioProcessorEditor::paintSettingsPanel(juce::Graphics& graphics, 
         graphics.setFont(mono(11.0f));
         graphics.drawText(juce::String(static_cast<int>(def.stringLabels.size())) + " str",
                           row.withTrimmedRight(12.0f).toNearestInt(), juce::Justification::centredRight);
-        tuningHits.push_back({ row.toNearestInt(), static_cast<int>(preset) });
+        if (row.getBottom() > listTop + 1.0f && row.getY() < listBottom - 1.0f)
+            tuningHits.push_back({ row.toNearestInt(), static_cast<int>(preset) });
         y += rowH + rowGap;
     }
+    graphics.restoreState();
 
-    const auto accLabelY = juce::jmin(y + 6.0f, panelBounds.getBottom() - 70.0f);
-    sectionLabel("Accidentals", accLabelY);
-    drawSegmented(graphics, juce::Rectangle<float>(bodyLeft, accLabelY + 20.0f, 200.0f, 30.0f),
+    if (tuningMaxScroll > 0.0f)
+    {
+        const auto barX = bodyLeft + bodyW - 4.0f;
+        graphics.setColour(juce::Colours::white.withAlpha(0.06f));
+        graphics.fillRoundedRectangle(barX, listTop, 3.0f, listBottom - listTop, 1.5f);
+        const auto thumbH = juce::jmax(24.0f, (listBottom - listTop) * (listBottom - listTop) / contentH);
+        const auto thumbY = listTop + (tuningScroll / tuningMaxScroll) * ((listBottom - listTop) - thumbH);
+        graphics.setColour(juce::Colours::white.withAlpha(0.22f));
+        graphics.fillRoundedRectangle(barX, thumbY, 3.0f, thumbH, 1.5f);
+    }
+
+    sectionLabel("Accidentals", 354.0f);
+    drawSegmented(graphics, juce::Rectangle<float>(bodyLeft, 374.0f, 200.0f, 30.0f),
                   { "Sharps", "Flats" }, static_cast<int>(settings.accidentalSpelling), accidentalHits);
 }
 

@@ -72,7 +72,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout ApertuneAudioProcessor::crea
             "Guitar 7 Low B",
             "Guitar 8 Standard",
             "Guitar 9 Standard",
-            "Custom" },
+            "Custom",
+            "Drop D",
+            "Drop A",
+            "Drop E" },
         static_cast<int>(apertune::TuningPreset::guitar6Standard)));
     parameters.push_back(std::make_unique<juce::AudioParameterChoice>(
         juce::ParameterID { accidentalSpellingParameterId, 1 },

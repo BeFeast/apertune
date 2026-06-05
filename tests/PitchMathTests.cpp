@@ -542,11 +542,22 @@ void testTunerSettingsDriveStringRows()
         "TunerSettings: bass default list ends with Bass 6");
 
     const auto guitarPresets = apertune::presetsForScope(apertune::InstrumentScope::guitar);
-    check(guitarPresets.size() == 4, "TunerSettings: guitar exposes 6-9 string presets");
+    check(guitarPresets.size() == 7, "TunerSettings: guitar exposes 6-9 presets plus drop tunings");
     check(guitarPresets.front() == apertune::TuningPreset::guitar6Standard,
         "TunerSettings: guitar default list starts with Guitar 6");
     check(guitarPresets.back() == apertune::TuningPreset::guitar9Standard,
         "TunerSettings: guitar default list ends with Guitar 9");
+    check(apertune::tuningDefinitionForPreset(apertune::TuningPreset::dropD).stringLabels
+            == std::vector<std::string>{ "D", "A", "D", "G", "B", "E" },
+        "Drop D is D A D G B E");
+    check(apertune::tuningDefinitionForPreset(apertune::TuningPreset::dropA).stringLabels.size() == 7
+            && apertune::tuningDefinitionForPreset(apertune::TuningPreset::dropA).stringLabels.front() == "A",
+        "Drop A is a 7-string tuning starting on A");
+    check(apertune::tuningDefinitionForPreset(apertune::TuningPreset::dropE).stringLabels.size() == 8
+            && apertune::tuningDefinitionForPreset(apertune::TuningPreset::dropE).stringLabels.front() == "E",
+        "Drop E is an 8-string tuning starting on E");
+    check(apertune::presetBelongsToScope(apertune::TuningPreset::dropD, apertune::InstrumentScope::guitar),
+        "Drop D belongs to the guitar scope");
 
     const auto customPresets = apertune::presetsForScope(apertune::InstrumentScope::custom);
     check(customPresets.size() == 1 && customPresets.front() == apertune::TuningPreset::custom,
