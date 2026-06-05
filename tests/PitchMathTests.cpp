@@ -2,6 +2,7 @@
 #include "TunerUiModel.h"
 
 #include <cmath>
+#include <cstdint>
 #include <cstdlib>
 #include <iostream>
 #include <limits>
@@ -89,6 +90,20 @@ std::vector<double> renderHarmonicTone(double frequencyHz, double seconds, doubl
             + 0.17 * std::sin(2.0 * std::acos(-1.0) * frequencyHz * 2.0 * t)
             + 0.12 * std::sin(2.0 * std::acos(-1.0) * frequencyHz * 3.0 * t)
             + 0.07 * std::sin(2.0 * std::acos(-1.0) * frequencyHz * 4.0 * t);
+    }
+    return samples;
+}
+
+std::vector<double> renderDeterministicNoise(double seconds, double sampleRate, double amplitude = 0.02)
+{
+    const auto count = static_cast<std::size_t>(std::round(seconds * sampleRate));
+    std::vector<double> samples(count, 0.0);
+    std::uint32_t state = 0x12345678u;
+    for (auto& sample : samples)
+    {
+        state = state * 1664525u + 1013904223u;
+        const auto normalized = static_cast<double>((state >> 8) & 0xffffu) / 32767.5 - 1.0;
+        sample = normalized * amplitude;
     }
     return samples;
 }
@@ -414,7 +429,7 @@ void testRealTimeDetectorSilenceRelease()
     if (shortSilence)
         checkNear(shortSilence->visibility, 1.0, 1e-9, "RealTimePitchDetector: release hold remains visible");
 
-    const auto fadingSilence = feed(detector, std::vector<double>(static_cast<std::size_t>(0.12 * 44100.0), 0.0));
+    const auto fadingSilence = feed(detector, std::vector<double>(static_cast<std::size_t>(0.10 * 44100.0), 0.0));
     check(fadingSilence.has_value(), "RealTimePitchDetector: release fade keeps reading briefly");
     if (fadingSilence)
         check(fadingSilence->visibility > 0.0 && fadingSilence->visibility < 1.0,
@@ -422,6 +437,25 @@ void testRealTimeDetectorSilenceRelease()
 
     const auto longSilence = feed(detector, std::vector<double>(static_cast<std::size_t>(0.20 * 44100.0), 0.0));
     check(!longSilence.has_value(), "RealTimePitchDetector: long silence clears reading");
+}
+
+void testRealTimeDetectorClearsHeldReadingAfterFade()
+{
+    apertune::PitchDetectorConfig config;
+    config.releaseHoldSeconds = 0.04;
+    config.releaseFadeSeconds = 0.04;
+    config.yinThreshold = 0.08;
+    apertune::RealTimePitchDetector detector(config);
+    detector.prepare(44100.0);
+
+    const auto active = feed(detector, renderSine(440.0, 0.16, 44100.0));
+    check(active.has_value(), "RealTimePitchDetector: active tone before held reset");
+
+    const auto cleared = feed(detector, std::vector<double>(static_cast<std::size_t>(0.14 * 44100.0), 0.0));
+    check(!cleared.has_value(), "RealTimePitchDetector: release fade ends with no reading");
+
+    const auto unpitched = feed(detector, renderDeterministicNoise(0.12, 44100.0));
+    check(!unpitched.has_value(), "RealTimePitchDetector: unpitched signal after fade does not restore stale note");
 }
 
 void testRealTimeDetectorSmoothing()
@@ -560,6 +594,7 @@ int main()
     testRealTimeDetectorTracksCleanNotes();
     testRealTimeDetectorRejectsOvertoneWhenFundamentalPresent();
     testRealTimeDetectorSilenceRelease();
+    testRealTimeDetectorClearsHeldReadingAfterFade();
     testRealTimeDetectorSmoothing();
     testTunerUiDeterministicFrames();
     testTunerSettingsDriveStringRows();

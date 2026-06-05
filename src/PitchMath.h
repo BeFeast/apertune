@@ -88,7 +88,7 @@ private:
     void pushSample(double sample);
     void analysePending(double concertAHz);
     std::optional<double> estimateFrequency();
-    double calculateRms() const;
+    double calculateRecentRms() const;
     std::optional<PitchReading> smoothReading(double frequencyHz, double concertAHz);
     void updateRelease(bool signalPresent);
 
