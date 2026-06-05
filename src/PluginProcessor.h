@@ -5,13 +5,16 @@
 #include "PitchMath.h"
 #include "TunerUiModel.h"
 
+#include <atomic>
+#include <optional>
+#include <thread>
 #include <vector>
 
 class ApertuneAudioProcessor final : public juce::AudioProcessor
 {
 public:
     ApertuneAudioProcessor();
-    ~ApertuneAudioProcessor() override = default;
+    ~ApertuneAudioProcessor() override;
 
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void releaseResources() override;
@@ -47,11 +50,27 @@ private:
 
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
+    void startAnalysisThread();
+    void stopAnalysisThread();
+    void runAnalysis();
+
     juce::AudioProcessorValueTreeState state;
     double currentSampleRate = 44100.0;
+
+    // Pitch detection runs OFF the audio thread (it is O(n*m) YIN) so processBlock stays real-time
+    // safe. The audio thread only mono-mixes and pushes into a lock-free FIFO.
     apertune::RealTimePitchDetector pitchDetector;
-    std::optional<apertune::PitchReading> lastPitchReading;
-    std::vector<double> monoScratch;
+    juce::AbstractFifo sampleFifo { 1 };
+    std::vector<float> fifoBuffer;     // backing store for sampleFifo
+    std::vector<float> monoMix;        // audio-thread mono mixdown scratch (pre-sized)
+    std::vector<float> analysisChunk;  // analysis-thread drain scratch
+
+    // Published reading: analysis thread writes, UI thread reads. Audio thread never touches it.
+    mutable juce::SpinLock readingLock;
+    std::optional<apertune::PitchReading> publishedReading;
+
+    std::thread analysisThread;
+    std::atomic<bool> analysisShouldExit { false };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ApertuneAudioProcessor)
 };

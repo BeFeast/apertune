@@ -114,7 +114,7 @@ ApertuneAudioProcessorEditor::ApertuneAudioProcessorEditor(ApertuneAudioProcesso
       muteAttachment(audioProcessor.getState(), muteParameterId, muteButton),
       concertAAttachment(audioProcessor.getState(), concertAParameterId, concertASlider)
 {
-    setSize(720, 500);
+    setSize(760, 500);
 
     muteButton.setButtonText("Mute");
     muteButton.setColour(juce::ToggleButton::textColourId, textSecondary());
@@ -171,12 +171,20 @@ ApertuneAudioProcessorEditor::ApertuneAudioProcessorEditor(ApertuneAudioProcesso
 
     refreshPresetItems();
     syncPresetComboToParameter();
+
+    startTimerHz(30);
 }
 
 ApertuneAudioProcessorEditor::~ApertuneAudioProcessorEditor()
 {
+    stopTimer();
     audioProcessor.getState().removeParameterListener(tuningPresetParameterId, this);
     audioProcessor.getState().removeParameterListener(instrumentScopeParameterId, this);
+}
+
+void ApertuneAudioProcessorEditor::timerCallback()
+{
+    repaint();
 }
 
 void ApertuneAudioProcessorEditor::paint(juce::Graphics& graphics)
@@ -308,16 +316,19 @@ void ApertuneAudioProcessorEditor::paint(juce::Graphics& graphics)
         juce::Justification::centredRight);
 
     const auto note = frame.hasSignal || frame.muted ? juce::String(frame.noteName.data()) : juce::String("--");
+    juce::Font noteFont(juce::FontOptions(82.0f, juce::Font::bold));
     graphics.setColour(frame.inLock ? lockGreen() : (frame.hasSignal ? textPrimary() : textMuted()));
-    graphics.setFont(juce::FontOptions(82.0f, juce::Font::bold));
-    graphics.drawText(note, noteRow.withSizeKeepingCentre(130.0f, noteRow.getHeight()).toNearestInt(), juce::Justification::centred);
+    graphics.setFont(noteFont);
+    auto noteCenterBox = noteRow.withSizeKeepingCentre(170.0f, noteRow.getHeight());
+    graphics.drawText(note, noteCenterBox.toNearestInt(), juce::Justification::centred);
     if (frame.hasSignal || frame.muted)
     {
-        auto octaveBox = noteRow.withSizeKeepingCentre(130.0f, noteRow.getHeight());
-        octaveBox.setX(octaveBox.getRight() - 12.0f);
-        octaveBox.setWidth(42.0f);
-        octaveBox.setY(octaveBox.getY() + 18.0f);
-        graphics.setFont(juce::FontOptions(23.0f, juce::Font::bold));
+        juce::GlyphArrangement glyphs;
+        glyphs.addLineOfText(noteFont, note, 0.0f, 0.0f);
+        const auto glyphWidth = glyphs.getBoundingBox(0, -1, true).getWidth();
+        const auto glyphRight = noteCenterBox.getCentreX() + glyphWidth * 0.5f;
+        juce::Rectangle<float> octaveBox(glyphRight + 4.0f, noteRow.getCentreY() - 1.0f, 40.0f, 32.0f);
+        graphics.setFont(juce::FontOptions(24.0f, juce::Font::bold));
         graphics.setColour(textMuted());
         graphics.drawText(juce::String(frame.octave), octaveBox.toNearestInt(), juce::Justification::centredLeft);
     }
@@ -332,7 +343,7 @@ void ApertuneAudioProcessorEditor::paint(juce::Graphics& graphics)
         ? ((frame.hasSignal || frame.muted) ? juce::String(frame.frequencyHz, 1) + " Hz" : "--.- Hz")
         : ((frame.hasSignal || frame.muted) ? centsText(frame) + " cents" : "--.- cents");
     graphics.drawText(footerText,
-        footer.withSizeKeepingCentre(140.0f, footer.getHeight()).toNearestInt(),
+        footer.withSizeKeepingCentre(150.0f, footer.getHeight()).toNearestInt(),
         juce::Justification::centred);
 }
 
@@ -343,15 +354,14 @@ void ApertuneAudioProcessorEditor::resized()
     muteButton.setBounds(titleBar.removeFromRight(96));
 
     auto footer = getLocalBounds().reduced(26).removeFromBottom(54).reduced(28, 11);
-    concertASlider.setBounds(footer.removeFromRight(210));
+    concertASlider.setBounds(footer.removeFromRight(200));
     footer.removeFromRight(10);
-    accidentalSpellingBox.setBounds(footer.removeFromRight(82));
+    accidentalSpellingBox.setBounds(footer.removeFromRight(80));
     footer.removeFromRight(10);
     tuningPresetBox.setBounds(footer.removeFromRight(150));
     footer.removeFromRight(10);
-    instrumentScopeBox.setBounds(footer.removeFromRight(92));
-    footer.removeFromRight(10);
-    displayUnitBox.setBounds(footer.removeFromLeft(86));
+    instrumentScopeBox.setBounds(footer.removeFromRight(88));
+    displayUnitBox.setBounds(footer.removeFromLeft(80));
 }
 
 void ApertuneAudioProcessorEditor::refreshPresetItems()

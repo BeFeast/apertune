@@ -8,6 +8,7 @@
 
 class ApertuneAudioProcessorEditor final
     : public juce::AudioProcessorEditor,
+      private juce::Timer,
       private juce::AudioProcessorValueTreeState::Listener
 {
 public:
@@ -18,6 +19,7 @@ public:
     void resized() override;
 
 private:
+    void timerCallback() override;
     void parameterChanged(const juce::String& parameterID, float newValue) override;
 
     ApertuneAudioProcessor& audioProcessor;
