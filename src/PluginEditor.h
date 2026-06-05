@@ -26,21 +26,33 @@ private:
     void paintTunerFace(juce::Graphics& graphics, juce::Rectangle<float> panelBounds);
     void paintSettingsPanel(juce::Graphics& graphics, juce::Rectangle<float> panelBounds);
 
+    void setDisplayUnit(int unitIndex);
+    void nudgeConcertA(float deltaHz);
+
     ApertuneAudioProcessor& audioProcessor;
 
     bool showSettings { false };
+    juce::Image grainImage;
 
-    juce::ToggleButton muteButton;
-    juce::TextButton settingsButton;       // gear hit target on the tuner face (opens settings)
-    juce::TextButton closeSettingsButton;   // "Done" in the settings view (returns to tuner)
+    // Title-bar chrome (transparent hit targets; icons are painted).
+    juce::ToggleButton muteButton;        // speaker; toggles the mute parameter
+    juce::TextButton settingsButton;       // gear; opens settings
+    juce::TextButton closeSettingsButton;  // close X; returns to the tuner face
+
+    // Footer controls on the tuner face.
+    juce::TextButton unitCentsButton;      // Cents segment of the unit toggle
+    juce::TextButton unitHzButton;         // Hz segment of the unit toggle
+    juce::TextButton refUpButton;          // reference-pitch stepper up
+    juce::TextButton refDownButton;        // reference-pitch stepper down
+
+    // Settings controls (still the interim generic panel; faithful picker is Step 3).
     juce::Slider concertASlider;
-    juce::ComboBox displayUnitBox;
     juce::ComboBox instrumentScopeBox;
     juce::ComboBox tuningPresetBox;
     juce::ComboBox accidentalSpellingBox;
+
     juce::AudioProcessorValueTreeState::ButtonAttachment muteAttachment;
     juce::AudioProcessorValueTreeState::SliderAttachment concertAAttachment;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> displayUnitAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> instrumentScopeAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> accidentalSpellingAttachment;
 
