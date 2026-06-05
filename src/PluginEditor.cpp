@@ -509,6 +509,16 @@ void ApertuneAudioProcessorEditor::paintSettingsPanel(juce::Graphics& graphics, 
         graphics.drawText("448", juce::Rectangle<float>(sb.getRight() - 40.0f, sb.getBottom(), 40.0f, 14.0f).toNearestInt(), juce::Justification::centredRight);
     }
 
+    // accidentals share the reference-pitch row (right side)
+    {
+        const auto accX = panelBounds.getRight() - 30.0f - 150.0f;
+        graphics.setColour(textMuted());
+        graphics.setFont(grotesk(11.0f, 600).withExtraKerningFactor(0.14f));
+        graphics.drawText("ACCIDENTALS", juce::Rectangle<float>(accX, 82.0f, 150.0f, 16.0f).toNearestInt(), juce::Justification::centredLeft);
+        drawSegmented(graphics, juce::Rectangle<float>(accX, 104.0f, 150.0f, 30.0f),
+                      { "Sharps", "Flats" }, static_cast<int>(settings.accidentalSpelling), accidentalHits);
+    }
+
     sectionLabel("Tuning preset", 162.0f);
     drawSegmented(graphics, juce::Rectangle<float>(bodyLeft, 182.0f, bodyW, 32.0f),
                   { juce::String::fromUTF8("Bass \xc2\xb7 4-6"),
@@ -517,7 +527,7 @@ void ApertuneAudioProcessorEditor::paintSettingsPanel(juce::Graphics& graphics, 
                   static_cast<int>(settings.instrumentScope), instrumentHits);
 
     const auto rowH = 34.0f, rowGap = 6.0f;
-    const auto listTop = 224.0f, listBottom = 344.0f;
+    const auto listTop = 224.0f, listBottom = 398.0f;
     const auto presets = apertune::presetsForScope(settings.instrumentScope);
     const auto contentH = static_cast<float>(presets.size()) * (rowH + rowGap) - rowGap;
     tuningMaxScroll = juce::jmax(0.0f, contentH - (listBottom - listTop));
@@ -583,10 +593,6 @@ void ApertuneAudioProcessorEditor::paintSettingsPanel(juce::Graphics& graphics, 
         graphics.setColour(juce::Colours::white.withAlpha(0.22f));
         graphics.fillRoundedRectangle(barX, thumbY, 3.0f, thumbH, 1.5f);
     }
-
-    sectionLabel("Accidentals", 354.0f);
-    drawSegmented(graphics, juce::Rectangle<float>(bodyLeft, 374.0f, 200.0f, 30.0f),
-                  { "Sharps", "Flats" }, static_cast<int>(settings.accidentalSpelling), accidentalHits);
 }
 
 void ApertuneAudioProcessorEditor::resized()
@@ -602,8 +608,8 @@ void ApertuneAudioProcessorEditor::resized()
     settingsButton.setBounds(rightIcon);
     closeSettingsButton.setBounds(rightIcon);
 
-    const int bodyLeft = 30, bodyRight = getWidth() - 30;
-    concertASlider.setBounds(bodyLeft + 150, 108, (bodyRight - (bodyLeft + 150)), 22);
+    const int bodyLeft = 30;
+    concertASlider.setBounds(bodyLeft + 150, 108, 220, 22);
 }
 
 void ApertuneAudioProcessorEditor::parameterChanged(const juce::String&, float)
