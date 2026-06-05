@@ -121,10 +121,10 @@ void RealTimePitchDetector::analysePending(double concertAHz)
         return;
     }
 
-    const auto rms = calculateRms();
-    if (sampleWindow.size() < windowSize / 2 || rms < config.silenceRmsThreshold)
+    const auto signalPresent = calculateRecentRms() >= config.silenceRmsThreshold;
+    if (sampleWindow.size() < windowSize / 2 || !signalPresent)
     {
-        updateRelease(false);
+        updateRelease(signalPresent);
         return;
     }
 
@@ -136,7 +136,7 @@ void RealTimePitchDetector::analysePending(double concertAHz)
         return;
     }
 
-    updateRelease(false);
+    updateRelease(signalPresent);
 }
 
 std::optional<double> RealTimePitchDetector::estimateFrequency()
@@ -221,15 +221,20 @@ std::optional<double> RealTimePitchDetector::estimateFrequency()
     return frequency;
 }
 
-double RealTimePitchDetector::calculateRms() const
+double RealTimePitchDetector::calculateRecentRms() const
 {
     if (sampleWindow.empty())
         return 0.0;
 
+    const auto count = std::min(sampleWindow.size(), hopSize);
+    const auto first = sampleWindow.size() - count;
     double sum = 0.0;
-    for (const auto sample : sampleWindow)
+    for (std::size_t i = first; i < sampleWindow.size(); ++i)
+    {
+        const auto sample = sampleWindow[i];
         sum += sample * sample;
-    return std::sqrt(sum / static_cast<double>(sampleWindow.size()));
+    }
+    return std::sqrt(sum / static_cast<double>(count));
 }
 
 std::optional<PitchReading> RealTimePitchDetector::smoothReading(double frequencyHz, double concertAHz)
@@ -282,6 +287,7 @@ void RealTimePitchDetector::updateRelease(bool signalPresent)
     }
 
     currentReading.reset();
+    heldReading.reset();
     smoothedMidi.reset();
 }
 } // namespace apertune
