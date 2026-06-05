@@ -29,8 +29,6 @@ private:
     void paintTunerFace(juce::Graphics& graphics, juce::Rectangle<float> panelBounds);
     void paintSettingsPanel(juce::Graphics& graphics, juce::Rectangle<float> panelBounds);
 
-    void setDisplayUnit(int unitIndex);
-    void nudgeConcertA(float deltaHz);
     void setInstrumentScope(int scopeIndex);
     void setTuningPreset(int presetIndex);
     void setAccidental(int spellingIndex);
@@ -44,12 +42,6 @@ private:
     juce::ToggleButton muteButton;
     juce::TextButton settingsButton;
     juce::TextButton closeSettingsButton;
-
-    // Footer controls on the tuner face.
-    juce::TextButton unitCentsButton;
-    juce::TextButton unitHzButton;
-    juce::TextButton refUpButton;
-    juce::TextButton refDownButton;
 
     // Settings reference slider (APVTS-attached). The instrument/tuning/accidental
     // controls are painted and dispatched through mouseDown against these hit lists.
