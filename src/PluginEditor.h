@@ -33,6 +33,7 @@ private:
     void setInstrumentScope(int scopeIndex);
     void setTuningPreset(int presetIndex);
     void setAccidental(int spellingIndex);
+    void handleCustomHit(int code);
 
     ApertuneAudioProcessor& audioProcessor;
 
@@ -52,6 +53,7 @@ private:
     std::vector<std::pair<juce::Rectangle<int>, int>> instrumentHits;
     std::vector<std::pair<juce::Rectangle<int>, int>> tuningHits;
     std::vector<std::pair<juce::Rectangle<int>, int>> accidentalHits;
+    std::vector<std::pair<juce::Rectangle<int>, int>> customHits;
 
     juce::AudioProcessorValueTreeState::ButtonAttachment muteAttachment;
     juce::AudioProcessorValueTreeState::SliderAttachment concertAAttachment;

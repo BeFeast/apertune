@@ -588,6 +588,15 @@ void testTunerSettingsDriveStringRows()
     check(apertune::coercePresetForScope(apertune::TuningPreset::bass4Standard, apertune::InstrumentScope::guitar)
             == apertune::TuningPreset::guitar6Standard,
         "TunerSettings: invalid guitar preset coerces to default");
+
+    apertune::TunerSettings customSettings;
+    customSettings.instrumentScope = apertune::InstrumentScope::custom;
+    customSettings.tuningPreset = apertune::TuningPreset::custom;
+    customSettings.customMidiNotes = { 38, 45, 50, 55 };
+    auto customFrame = apertune::makeTunerUiFrame(std::nullopt, false, apertune::defaultConcertAHz, customSettings);
+    check(customFrame.stringLabels.size() == 4, "Custom tuning drives the chosen string count");
+    check(customFrame.stringLabels.front() == "D" && customFrame.stringLabels.back() == "G",
+        "Custom tuning maps MIDI notes to labels");
 }
 } // namespace
 

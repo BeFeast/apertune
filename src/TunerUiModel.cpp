@@ -279,6 +279,9 @@ TunerUiFrame makeTunerUiFrame(
     const auto state = classifyTuneState(reading, muted);
     const auto preset = coercePresetForScope(settings.tuningPreset, settings.instrumentScope);
     auto tuning = tuningDefinitionForPreset(preset);
+    if (settings.instrumentScope == InstrumentScope::custom
+        && settings.customMidiNotes.size() >= 4 && settings.customMidiNotes.size() <= 9)
+        tuning.stringMidiNotes = settings.customMidiNotes;
     tuning.stringLabels = labelsForMidiNotes(tuning.stringMidiNotes, settings.accidentalSpelling);
 
     TunerUiFrame frame;

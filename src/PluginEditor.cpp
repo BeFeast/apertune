@@ -282,6 +282,23 @@ void ApertuneAudioProcessorEditor::mouseDown(const juce::MouseEvent& event)
     for (const auto& h : instrumentHits) if (h.first.contains(pos)) { setInstrumentScope(h.second); return; }
     for (const auto& h : tuningHits)     if (h.first.contains(pos)) { setTuningPreset(h.second); return; }
     for (const auto& h : accidentalHits) if (h.first.contains(pos)) { setAccidental(h.second); return; }
+    for (const auto& h : customHits)     if (h.first.contains(pos)) { handleCustomHit(h.second); return; }
+}
+
+void ApertuneAudioProcessorEditor::handleCustomHit(int code)
+{
+    auto notes = audioProcessor.getCustomTuning();
+    if (code == 1000) { if (notes.size() > 4) notes.pop_back(); }
+    else if (code == 1001) { if (notes.size() < 9) notes.push_back(notes.empty() ? 40 : juce::jmin(96, notes.back() + 5)); }
+    else if (code >= 2000)
+    {
+        const auto idx = (code - 2000) / 2;
+        const auto up = ((code - 2000) % 2) == 1;
+        if (idx >= 0 && idx < static_cast<int>(notes.size()))
+            notes[static_cast<std::size_t>(idx)] = juce::jlimit(16, 96, notes[static_cast<std::size_t>(idx)] + (up ? 1 : -1));
+    }
+    audioProcessor.setCustomTuning(notes);
+    repaint();
 }
 
 void ApertuneAudioProcessorEditor::mouseWheelMove(const juce::MouseEvent&, const juce::MouseWheelDetails& wheel)
@@ -481,6 +498,7 @@ void ApertuneAudioProcessorEditor::paintSettingsPanel(juce::Graphics& graphics, 
     instrumentHits.clear();
     tuningHits.clear();
     accidentalHits.clear();
+    customHits.clear();
 
     const auto settings = audioProcessor.getTunerSettings();
     const auto concertA = static_cast<double>(*audioProcessor.getState().getRawParameterValue(concertAParameterId));
@@ -526,6 +544,8 @@ void ApertuneAudioProcessorEditor::paintSettingsPanel(juce::Graphics& graphics, 
                     "Custom" },
                   static_cast<int>(settings.instrumentScope), instrumentHits);
 
+    if (settings.instrumentScope != apertune::InstrumentScope::custom)
+    {
     const auto rowH = 34.0f, rowGap = 6.0f;
     const auto listTop = 224.0f, listBottom = 398.0f;
     const auto presets = apertune::presetsForScope(settings.instrumentScope);
@@ -592,6 +612,93 @@ void ApertuneAudioProcessorEditor::paintSettingsPanel(juce::Graphics& graphics, 
         const auto thumbY = listTop + (tuningScroll / tuningMaxScroll) * ((listBottom - listTop) - thumbH);
         graphics.setColour(juce::Colours::white.withAlpha(0.22f));
         graphics.fillRoundedRectangle(barX, thumbY, 3.0f, thumbH, 1.5f);
+    }
+    }
+    else
+    {
+        const auto notes = audioProcessor.getCustomTuning();
+        const auto count = static_cast<int>(notes.size());
+
+        {
+            auto row = juce::Rectangle<float>(bodyLeft, 224.0f, bodyW, 32.0f);
+            graphics.setColour(textSecondary());
+            graphics.setFont(grotesk(14.0f, 500));
+            graphics.drawText("Strings", juce::Rectangle<float>(row.getX(), row.getY(), 140.0f, row.getHeight()).toNearestInt(), juce::Justification::centredLeft);
+            const auto stepW = 32.0f;
+            auto plus = juce::Rectangle<float>(row.getRight() - stepW, row.getY() + 1.0f, stepW, 30.0f);
+            auto numBox = juce::Rectangle<float>(plus.getX() - 44.0f, row.getY() + 1.0f, 44.0f, 30.0f);
+            auto minus = juce::Rectangle<float>(numBox.getX() - stepW, row.getY() + 1.0f, stepW, 30.0f);
+            auto stepBtn = [&](juce::Rectangle<float> b, const char* glyph, int code, bool enabled)
+            {
+                graphics.setColour(juce::Colours::white.withAlpha(0.13f));
+                graphics.drawRoundedRectangle(b, 7.0f, 1.0f);
+                graphics.setColour(enabled ? textSecondary() : textMuted().withAlpha(0.4f));
+                graphics.setFont(mono(18.0f));
+                graphics.drawText(glyph, b.toNearestInt(), juce::Justification::centred);
+                if (enabled)
+                    customHits.push_back({ b.toNearestInt(), code });
+            };
+            stepBtn(minus, "-", 1000, count > 4);
+            graphics.setColour(textPrimary());
+            graphics.setFont(mono(16.0f, true));
+            graphics.drawText(juce::String(count), numBox.toNearestInt(), juce::Justification::centred);
+            stepBtn(plus, "+", 1001, count < 9);
+        }
+
+        const auto rowH = 32.0f, rowGap = 6.0f;
+        const auto listTop = 266.0f, listBottom = 398.0f;
+        const auto contentH = static_cast<float>(count) * (rowH + rowGap) - rowGap;
+        tuningMaxScroll = juce::jmax(0.0f, contentH - (listBottom - listTop));
+        tuningScroll = juce::jlimit(0.0f, tuningMaxScroll, tuningScroll);
+        const auto listW = bodyW - (tuningMaxScroll > 0.0f ? 12.0f : 0.0f);
+
+        graphics.saveState();
+        graphics.reduceClipRegion(juce::Rectangle<float>(bodyLeft, listTop, bodyW, listBottom - listTop).toNearestInt());
+        auto y = listTop - tuningScroll;
+        for (int i = 0; i < count; ++i)
+        {
+            const auto row = juce::Rectangle<float>(bodyLeft, y, listW, rowH);
+            graphics.setColour(juce::Colours::white.withAlpha(0.03f));
+            graphics.fillRoundedRectangle(row, 8.0f);
+            graphics.setColour(textMuted());
+            graphics.setFont(mono(12.0f));
+            graphics.drawText(juce::String(i + 1), juce::Rectangle<float>(row.getX() + 12.0f, row.getY(), 24.0f, rowH).toNearestInt(), juce::Justification::centredLeft);
+            const auto note = notes[static_cast<std::size_t>(i)];
+            const auto label = juce::String(apertune::noteNameForMidiNote(note, settings.accidentalSpelling).data())
+                             + juce::String(apertune::octaveForMidiNote(note));
+            graphics.setColour(rowName());
+            graphics.setFont(grotesk(16.0f, 500));
+            graphics.drawText(label, juce::Rectangle<float>(row.getX() + 46.0f, row.getY(), 110.0f, rowH).toNearestInt(), juce::Justification::centredLeft);
+            const auto stepW = 28.0f;
+            auto up = juce::Rectangle<float>(row.getRight() - stepW - 6.0f, row.getY() + 3.0f, stepW, rowH - 6.0f);
+            auto down = juce::Rectangle<float>(up.getX() - stepW - 4.0f, row.getY() + 3.0f, stepW, rowH - 6.0f);
+            const auto visible = row.getBottom() > listTop + 1.0f && row.getY() < listBottom - 1.0f;
+            auto stp = [&](juce::Rectangle<float> b, const char* glyph, int code)
+            {
+                graphics.setColour(juce::Colours::white.withAlpha(0.10f));
+                graphics.drawRoundedRectangle(b, 6.0f, 1.0f);
+                graphics.setColour(textSecondary());
+                graphics.setFont(mono(15.0f));
+                graphics.drawText(glyph, b.toNearestInt(), juce::Justification::centred);
+                if (visible)
+                    customHits.push_back({ b.toNearestInt(), code });
+            };
+            stp(down, "-", 2000 + i * 2);
+            stp(up, "+", 2000 + i * 2 + 1);
+            y += rowH + rowGap;
+        }
+        graphics.restoreState();
+
+        if (tuningMaxScroll > 0.0f)
+        {
+            const auto barX = bodyLeft + bodyW - 4.0f;
+            graphics.setColour(juce::Colours::white.withAlpha(0.06f));
+            graphics.fillRoundedRectangle(barX, listTop, 3.0f, listBottom - listTop, 1.5f);
+            const auto thumbH = juce::jmax(24.0f, (listBottom - listTop) * (listBottom - listTop) / contentH);
+            const auto thumbY = listTop + (tuningScroll / tuningMaxScroll) * ((listBottom - listTop) - thumbH);
+            graphics.setColour(juce::Colours::white.withAlpha(0.22f));
+            graphics.fillRoundedRectangle(barX, thumbY, 3.0f, thumbH, 1.5f);
+        }
     }
 }
 
