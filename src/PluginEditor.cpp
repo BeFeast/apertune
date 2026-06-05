@@ -102,30 +102,36 @@ void drawChevron(juce::Graphics& g, float cx, float cy, bool right, juce::Colour
 
 void drawSpeaker(juce::Graphics& g, juce::Rectangle<float> a, juce::Colour colour, bool muted)
 {
-    const auto w = a.getWidth(), h = a.getHeight(), x = a.getX(), y = a.getY();
+    // Faithful to the design IconSpeaker SVG on a 24x24 viewbox.
+    auto vx = [&](float v) { return a.getX() + v / 24.0f * a.getWidth(); };
+    auto vy = [&](float v) { return a.getY() + v / 24.0f * a.getHeight(); };
+    const auto unit = a.getWidth() / 24.0f;
+
     juce::Path body;
-    body.startNewSubPath(x + 0.08f * w, y + 0.38f * h);
-    body.lineTo(x + 0.08f * w, y + 0.62f * h);
-    body.lineTo(x + 0.30f * w, y + 0.62f * h);
-    body.lineTo(x + 0.52f * w, y + 0.82f * h);
-    body.lineTo(x + 0.52f * w, y + 0.18f * h);
-    body.lineTo(x + 0.30f * w, y + 0.38f * h);
+    body.startNewSubPath(vx(11.0f), vy(5.0f));
+    body.lineTo(vx(6.0f), vy(9.0f));
+    body.lineTo(vx(3.0f), vy(9.0f));
+    body.lineTo(vx(3.0f), vy(15.0f));
+    body.lineTo(vx(6.0f), vy(15.0f));
+    body.lineTo(vx(11.0f), vy(19.0f));
     body.closeSubPath();
     g.setColour(colour);
     g.fillPath(body);
+
     if (muted)
     {
-        g.drawLine(x + 0.60f * w, y + 0.30f * h, x + 0.92f * w, y + 0.70f * h, 1.7f);
-        g.drawLine(x + 0.92f * w, y + 0.30f * h, x + 0.60f * w, y + 0.70f * h, 1.7f);
+        g.drawLine(vx(14.0f), vy(7.0f), vx(21.0f), vy(17.0f), 1.8f * unit);
     }
     else
     {
-        const auto cx = x + 0.50f * w, cy = y + 0.50f * h;
-        for (auto r : { 0.18f * w, 0.30f * w })
+        const auto centre = juce::Point<float>(vx(12.0f), vy(12.0f));
+        const auto rightward = juce::MathConstants<float>::halfPi; // 3 o'clock (clockwise from top)
+        for (auto rv : { 5.0f, 8.5f })
         {
-            juce::Path arc;
-            arc.addCentredArc(cx, cy, r, r, 0.0f, -0.7f, 0.7f, true);
-            g.strokePath(arc, juce::PathStrokeType(1.6f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+            juce::Path wave;
+            wave.addCentredArc(centre.x, centre.y, rv * unit, rv * unit, 0.0f,
+                               rightward - 0.78f, rightward + 0.78f, true);
+            g.strokePath(wave, juce::PathStrokeType(1.6f * unit, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
         }
     }
 }
