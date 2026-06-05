@@ -3,6 +3,7 @@
 #include "PluginEditor.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <memory>
 
@@ -30,6 +31,11 @@ ApertuneAudioProcessor::ApertuneAudioProcessor()
           .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
       state(*this, nullptr, "ApertuneState", createParameterLayout())
 {
+}
+
+ApertuneAudioProcessor::~ApertuneAudioProcessor()
+{
+    stopAnalysisThread();
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout ApertuneAudioProcessor::createParameterLayout()
@@ -78,13 +84,76 @@ juce::AudioProcessorValueTreeState::ParameterLayout ApertuneAudioProcessor::crea
 
 void ApertuneAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
+    stopAnalysisThread();
+
     currentSampleRate = sampleRate;
     pitchDetector.prepare(sampleRate);
-    monoScratch.reserve(static_cast<std::size_t>(std::max(0, samplesPerBlock)));
-    lastPitchReading.reset();
+
+    {
+        const juce::SpinLock::ScopedLockType lock(readingLock);
+        publishedReading.reset();
+    }
+
+    const auto block = std::max(0, samplesPerBlock);
+    monoMix.assign(static_cast<std::size_t>(block), 0.0f);
+    analysisChunk.assign(static_cast<std::size_t>(std::max(2048, block)), 0.0f);
+
+    const auto fifoSize = std::max(16384, block * 8);
+    fifoBuffer.assign(static_cast<std::size_t>(fifoSize), 0.0f);
+    sampleFifo.setTotalSize(fifoSize);
+    sampleFifo.reset();
+
+    startAnalysisThread();
 }
 
-void ApertuneAudioProcessor::releaseResources() {}
+void ApertuneAudioProcessor::releaseResources()
+{
+    stopAnalysisThread();
+}
+
+void ApertuneAudioProcessor::startAnalysisThread()
+{
+    stopAnalysisThread();
+    analysisShouldExit.store(false, std::memory_order_relaxed);
+    analysisThread = std::thread([this] { runAnalysis(); });
+}
+
+void ApertuneAudioProcessor::stopAnalysisThread()
+{
+    analysisShouldExit.store(true, std::memory_order_relaxed);
+    if (analysisThread.joinable())
+        analysisThread.join();
+}
+
+void ApertuneAudioProcessor::runAnalysis()
+{
+    while (! analysisShouldExit.load(std::memory_order_relaxed))
+    {
+        const auto ready = sampleFifo.getNumReady();
+        if (ready > 0)
+        {
+            if (static_cast<int>(analysisChunk.size()) < ready)
+                analysisChunk.resize(static_cast<std::size_t>(ready));
+
+            int start1 = 0, size1 = 0, start2 = 0, size2 = 0;
+            sampleFifo.prepareToRead(ready, start1, size1, start2, size2);
+            if (size1 > 0)
+                std::copy(fifoBuffer.begin() + start1, fifoBuffer.begin() + start1 + size1, analysisChunk.begin());
+            if (size2 > 0)
+                std::copy(fifoBuffer.begin() + start2, fifoBuffer.begin() + start2 + size2, analysisChunk.begin() + size1);
+            sampleFifo.finishedRead(size1 + size2);
+
+            const auto concertA = static_cast<double>(*state.getRawParameterValue(concertAParameterId));
+            auto reading = pitchDetector.processSamples(
+                analysisChunk.data(), static_cast<std::size_t>(size1 + size2), concertA);
+
+            const juce::SpinLock::ScopedLockType lock(readingLock);
+            publishedReading = reading;
+        }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(4));
+    }
+}
 
 bool ApertuneAudioProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const
 {
@@ -109,27 +178,38 @@ void ApertuneAudioProcessor::processBlock(juce::AudioBuffer<double>& buffer, juc
 template <typename SampleType>
 void ApertuneAudioProcessor::processAudio(juce::AudioBuffer<SampleType>& buffer)
 {
-    const auto concertA = static_cast<double>(*state.getRawParameterValue(concertAParameterId));
     const auto channelCount = buffer.getNumChannels();
     const auto sampleCount = buffer.getNumSamples();
 
-    if (channelCount > 0 && sampleCount > 0)
+    // Tap the input (pre-mute) into the lock-free FIFO for the analysis thread. No detection here.
+    if (channelCount > 0 && sampleCount > 0 && sampleFifo.getTotalSize() > 1)
     {
-        monoScratch.assign(static_cast<std::size_t>(sampleCount), 0.0);
-        for (int channel = 0; channel < channelCount; ++channel)
+        if (static_cast<int>(monoMix.size()) < sampleCount)
+            monoMix.resize(static_cast<std::size_t>(sampleCount));
+
+        const auto gain = 1.0f / static_cast<float>(channelCount);
+        for (int sample = 0; sample < sampleCount; ++sample)
         {
-            const auto* input = buffer.getReadPointer(channel);
-            for (int sample = 0; sample < sampleCount; ++sample)
-                monoScratch[static_cast<std::size_t>(sample)] += static_cast<double>(input[sample]);
+            float sum = 0.0f;
+            for (int channel = 0; channel < channelCount; ++channel)
+                sum += static_cast<float>(buffer.getReadPointer(channel)[sample]);
+            monoMix[static_cast<std::size_t>(sample)] = sum * gain;
         }
 
-        const auto gain = 1.0 / static_cast<double>(channelCount);
-        for (auto& sample : monoScratch)
-            sample *= gain;
-
-        lastPitchReading = pitchDetector.processSamples(monoScratch.data(), monoScratch.size(), concertA);
+        const auto toWrite = std::min(sampleCount, sampleFifo.getFreeSpace());
+        if (toWrite > 0)
+        {
+            int start1 = 0, size1 = 0, start2 = 0, size2 = 0;
+            sampleFifo.prepareToWrite(toWrite, start1, size1, start2, size2);
+            if (size1 > 0)
+                std::copy(monoMix.begin(), monoMix.begin() + size1, fifoBuffer.begin() + start1);
+            if (size2 > 0)
+                std::copy(monoMix.begin() + size1, monoMix.begin() + size1 + size2, fifoBuffer.begin() + start2);
+            sampleFifo.finishedWrite(size1 + size2);
+        }
     }
 
+    // Mute affects the OUTPUT only; the detection tap above already captured the live signal.
     if (*state.getRawParameterValue(muteParameterId) > 0.5f)
         buffer.clear();
 }
@@ -178,7 +258,8 @@ apertune::TunerSettings ApertuneAudioProcessor::getTunerSettings() const
 
 std::optional<apertune::PitchReading> ApertuneAudioProcessor::getLastPitchReading() const
 {
-    return lastPitchReading;
+    const juce::SpinLock::ScopedLockType lock(readingLock);
+    return publishedReading;
 }
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
