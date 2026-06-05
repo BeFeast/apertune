@@ -22,8 +22,17 @@ private:
     void timerCallback() override;
     void parameterChanged(const juce::String& parameterID, float newValue) override;
 
+    void setSettingsVisible(bool shouldShow);
+    void paintTunerFace(juce::Graphics& graphics, juce::Rectangle<float> panelBounds);
+    void paintSettingsPanel(juce::Graphics& graphics, juce::Rectangle<float> panelBounds);
+
     ApertuneAudioProcessor& audioProcessor;
+
+    bool showSettings { false };
+
     juce::ToggleButton muteButton;
+    juce::TextButton settingsButton;       // gear hit target on the tuner face (opens settings)
+    juce::TextButton closeSettingsButton;   // "Done" in the settings view (returns to tuner)
     juce::Slider concertASlider;
     juce::ComboBox displayUnitBox;
     juce::ComboBox instrumentScopeBox;

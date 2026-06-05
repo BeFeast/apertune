@@ -95,6 +95,26 @@ void drawChevron(juce::Graphics& graphics, juce::Rectangle<float> bounds, apertu
     graphics.strokePath(path, juce::PathStrokeType(3.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 }
 
+void drawGear(juce::Graphics& graphics, juce::Rectangle<float> bounds, juce::Colour colour)
+{
+    const auto centre = bounds.getCentre();
+    const auto radius = juce::jmin(bounds.getWidth(), bounds.getHeight()) * 0.5f;
+    const auto bodyRadius = radius * 0.66f;
+    const auto holeRadius = radius * 0.28f;
+
+    graphics.setColour(colour);
+    for (int i = 0; i < 8; ++i)
+    {
+        const auto angle = juce::MathConstants<float>::twoPi * static_cast<float>(i) / 8.0f;
+        const auto cosA = std::cos(angle);
+        const auto sinA = std::sin(angle);
+        graphics.drawLine(centre.x + cosA * bodyRadius, centre.y + sinA * bodyRadius,
+                          centre.x + cosA * radius, centre.y + sinA * radius, 2.0f);
+    }
+    graphics.drawEllipse(centre.x - bodyRadius, centre.y - bodyRadius, bodyRadius * 2.0f, bodyRadius * 2.0f, 1.8f);
+    graphics.drawEllipse(centre.x - holeRadius, centre.y - holeRadius, holeRadius * 2.0f, holeRadius * 2.0f, 1.4f);
+}
+
 void styleComboBox(juce::ComboBox& comboBox)
 {
     comboBox.setColour(juce::ComboBox::backgroundColourId, juce::Colour::fromRGB(24, 27, 31));
@@ -121,6 +141,19 @@ ApertuneAudioProcessorEditor::ApertuneAudioProcessorEditor(ApertuneAudioProcesso
     muteButton.setColour(juce::ToggleButton::tickColourId, lockGreen());
     muteButton.setColour(juce::ToggleButton::tickDisabledColourId, textMuted());
     addAndMakeVisible(muteButton);
+
+    // Transparent hit target over the painted gear icon; opens the settings view.
+    settingsButton.setColour(juce::TextButton::buttonColourId, juce::Colours::transparentBlack);
+    settingsButton.setColour(juce::TextButton::buttonOnColourId, juce::Colours::transparentBlack);
+    settingsButton.setTooltip("Settings");
+    settingsButton.onClick = [this] { setSettingsVisible(true); };
+    addAndMakeVisible(settingsButton);
+
+    closeSettingsButton.setButtonText("Done");
+    closeSettingsButton.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGB(38, 42, 47));
+    closeSettingsButton.setColour(juce::TextButton::textColourOffId, textPrimary());
+    closeSettingsButton.onClick = [this] { setSettingsVisible(false); };
+    addAndMakeVisible(closeSettingsButton);
 
     concertASlider.setSliderStyle(juce::Slider::LinearHorizontal);
     concertASlider.setTextBoxStyle(juce::Slider::TextBoxRight, false, 72, 22);
@@ -172,6 +205,7 @@ ApertuneAudioProcessorEditor::ApertuneAudioProcessorEditor(ApertuneAudioProcesso
     refreshPresetItems();
     syncPresetComboToParameter();
 
+    setSettingsVisible(false);
     startTimerHz(30);
 }
 
@@ -187,17 +221,43 @@ void ApertuneAudioProcessorEditor::timerCallback()
     repaint();
 }
 
+void ApertuneAudioProcessorEditor::setSettingsVisible(bool shouldShow)
+{
+    showSettings = shouldShow;
+
+    muteButton.setVisible(!shouldShow);
+    settingsButton.setVisible(!shouldShow);
+    closeSettingsButton.setVisible(shouldShow);
+
+    concertASlider.setVisible(shouldShow);
+    displayUnitBox.setVisible(shouldShow);
+    instrumentScopeBox.setVisible(shouldShow);
+    tuningPresetBox.setVisible(shouldShow);
+    accidentalSpellingBox.setVisible(shouldShow);
+
+    repaint();
+}
+
 void ApertuneAudioProcessorEditor::paint(juce::Graphics& graphics)
 {
     graphics.fillAll(background());
 
+    const auto panelBounds = getLocalBounds().toFloat().reduced(26.0f);
+
+    if (showSettings)
+        paintSettingsPanel(graphics, panelBounds);
+    else
+        paintTunerFace(graphics, panelBounds);
+}
+
+void ApertuneAudioProcessorEditor::paintTunerFace(juce::Graphics& graphics, juce::Rectangle<float> panelBounds)
+{
     const auto muted = *audioProcessor.getState().getRawParameterValue(muteParameterId) > 0.5f;
     const auto concertA = static_cast<double>(*audioProcessor.getState().getRawParameterValue(concertAParameterId));
     const auto settings = audioProcessor.getTunerSettings();
     const auto frame = apertune::makeTunerUiFrame(audioProcessor.getLastPitchReading(), muted, concertA, settings);
     const auto accent = tuneColour(frame);
 
-    auto panelBounds = getLocalBounds().toFloat().reduced(26.0f);
     juce::ColourGradient panelGradient(panelTop(), panelBounds.getX(), panelBounds.getY(), panelBottom(), panelBounds.getX(), panelBounds.getBottom(), false);
     graphics.setGradientFill(panelGradient);
     graphics.fillRoundedRectangle(panelBounds, 8.0f);
@@ -228,9 +288,7 @@ void ApertuneAudioProcessorEditor::paint(juce::Graphics& graphics)
     graphics.setFont(juce::FontOptions(12.0f, juce::Font::bold));
     graphics.setColour(textMuted());
     graphics.drawText("APERTUNE", titleBar.withSizeKeepingCentre(160.0f, titleBar.getHeight()).toNearestInt(), juce::Justification::centred);
-    graphics.setColour(textMuted());
-    graphics.drawLine(panelBounds.getRight() - 42.0f, panelBounds.getY() + 18.0f, panelBounds.getRight() - 30.0f, panelBounds.getY() + 30.0f, 1.6f);
-    graphics.drawLine(panelBounds.getRight() - 30.0f, panelBounds.getY() + 18.0f, panelBounds.getRight() - 42.0f, panelBounds.getY() + 30.0f, 1.6f);
+    drawGear(graphics, settingsButton.getBounds().toFloat().reduced(2.0f), textSecondary());
 
     content.removeFromTop(24.0f);
 
@@ -347,21 +405,74 @@ void ApertuneAudioProcessorEditor::paint(juce::Graphics& graphics)
         juce::Justification::centred);
 }
 
+void ApertuneAudioProcessorEditor::paintSettingsPanel(juce::Graphics& graphics, juce::Rectangle<float> panelBounds)
+{
+    juce::ColourGradient panelGradient(panelTop(), panelBounds.getX(), panelBounds.getY(), panelBottom(), panelBounds.getX(), panelBounds.getBottom(), false);
+    graphics.setGradientFill(panelGradient);
+    graphics.fillRoundedRectangle(panelBounds, 8.0f);
+    graphics.setColour(border().withAlpha(0.85f));
+    graphics.drawRoundedRectangle(panelBounds, 8.0f, 1.0f);
+
+    auto titleBar = panelBounds.reduced(28.0f, 0.0f).removeFromTop(50.0f);
+    graphics.setColour(juce::Colour::fromRGB(19, 21, 24).withAlpha(0.62f));
+    graphics.fillRect(panelBounds.withHeight(50.0f));
+    graphics.setColour(border().withAlpha(0.7f));
+    graphics.drawLine(panelBounds.getX(), titleBar.getBottom(), panelBounds.getRight(), titleBar.getBottom(), 1.0f);
+
+    graphics.setColour(textPrimary());
+    graphics.setFont(juce::FontOptions(16.0f, juce::Font::bold));
+    graphics.drawText("Settings", titleBar.removeFromLeft(180.0f).toNearestInt(), juce::Justification::centredLeft);
+
+    const auto labelLeft = panelBounds.getX() + 28.0f;
+    auto drawRowLabel = [&](const juce::String& text, const juce::Component& control)
+    {
+        const auto controlBounds = control.getBounds().toFloat();
+        const juce::Rectangle<float> labelBox(labelLeft, controlBounds.getY(),
+                                              controlBounds.getX() - labelLeft - 14.0f, controlBounds.getHeight());
+        graphics.drawText(text, labelBox.toNearestInt(), juce::Justification::centredLeft);
+    };
+
+    graphics.setFont(juce::FontOptions(15.0f));
+    graphics.setColour(textSecondary());
+    drawRowLabel("Reference A", concertASlider);
+    drawRowLabel("Instrument", instrumentScopeBox);
+    drawRowLabel("Tuning", tuningPresetBox);
+    drawRowLabel("Accidentals", accidentalSpellingBox);
+    drawRowLabel("Display", displayUnitBox);
+}
+
 void ApertuneAudioProcessorEditor::resized()
 {
-    auto panelBounds = getLocalBounds().reduced(26);
-    auto titleBar = panelBounds.removeFromTop(50).reduced(28, 10);
-    muteButton.setBounds(titleBar.removeFromRight(96));
+    auto panel = getLocalBounds().reduced(26);
+    auto titleBar = panel.removeFromTop(50).reduced(28, 10);
 
-    auto footer = getLocalBounds().reduced(26).removeFromBottom(54).reduced(28, 11);
-    concertASlider.setBounds(footer.removeFromRight(200));
-    footer.removeFromRight(10);
-    accidentalSpellingBox.setBounds(footer.removeFromRight(80));
-    footer.removeFromRight(10);
-    tuningPresetBox.setBounds(footer.removeFromRight(150));
-    footer.removeFromRight(10);
-    instrumentScopeBox.setBounds(footer.removeFromRight(88));
-    displayUnitBox.setBounds(footer.removeFromLeft(80));
+    // Tuner-face title controls (right side): [gear] [Mute]
+    auto tunerTitle = titleBar;
+    muteButton.setBounds(tunerTitle.removeFromRight(96));
+    tunerTitle.removeFromRight(12);
+    settingsButton.setBounds(tunerTitle.removeFromRight(28).withSizeKeepingCentre(26, 26));
+
+    // Settings-view title control (right side): [Done]
+    closeSettingsButton.setBounds(titleBar.removeFromRight(84));
+
+    // Settings rows below the title bar.
+    auto content = panel.reduced(28, 0);
+    content.removeFromTop(30);
+    const auto controlWidth = 300;
+    const auto rowHeight = 40;
+    const auto rowGap = 18;
+    auto nextRow = [&content, rowHeight, rowGap]
+    {
+        auto row = content.removeFromTop(rowHeight);
+        content.removeFromTop(rowGap);
+        return row;
+    };
+
+    concertASlider.setBounds(nextRow().removeFromRight(controlWidth));
+    instrumentScopeBox.setBounds(nextRow().removeFromRight(controlWidth));
+    tuningPresetBox.setBounds(nextRow().removeFromRight(controlWidth));
+    accidentalSpellingBox.setBounds(nextRow().removeFromRight(controlWidth));
+    displayUnitBox.setBounds(nextRow().removeFromRight(controlWidth));
 }
 
 void ApertuneAudioProcessorEditor::refreshPresetItems()
